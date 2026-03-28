@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <utility>
 #include <vulkan/vulkan_core.h>
 #define GLFW_INCLUDE_VULKAN
 #include<GLFW/glfw3.h> //pulls in vulkan because of GLFW_INCLUDE_VULKAN flag
@@ -40,8 +41,7 @@ inline void buildVkInstance(VkInstance& instance) {
     log("Vulkan instance created");
 }
 
-inline void getGpuHandle(VkDevice& vkDevice, VkQueue& queue, const VkSurfaceKHR& surface ,const VkInstance& instance) {
-    VkPhysicalDevice physicalDevice {}; // PhysicalDevice is just a handle to the hardware
+inline void getGpuHandle(VkDevice& vkDevice, VkPhysicalDevice &physicalDevice, VkQueue& queue, const VkSurfaceKHR& surface ,const VkInstance& instance) {
     uint32_t count = 0;
     vkEnumeratePhysicalDevices(instance, &count, nullptr);
     std::vector<VkPhysicalDevice> devices(count);
@@ -104,6 +104,82 @@ inline void getGpuHandle(VkDevice& vkDevice, VkQueue& queue, const VkSurfaceKHR&
     log("Logical device created");
 }
 
+inline void buildSwapChain(VkSwapchainKHR& swapchain,
+                           const VkPhysicalDevice& physicalDevice,
+                           const VkDevice& logicalDevice,
+                           const VkSurfaceKHR& surface) 
+{
+
+    VkSurfaceCapabilitiesKHR capabilities {};
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities);
+
+    // surface format - BGRA* sRGB is standard
+    uint32_t formatCount;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, nullptr);
+    std::vector<VkSurfaceFormatKHR> formats(formatCount);
+    vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, formats.data());
+
+    VkSurfaceFormatKHR surfaceFormat = formats[0];
+    for (const auto& f : formats) {
+        if (f.format == VK_FORMAT_B8G8R8_SRGB && f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
+            surfaceFormat = f;
+            break;
+        }
+    }
+
+    // pick present mode = MAILBOX (triple buffer) else FIFO (vsync)
+    uint32_t presentModeCount;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, nullptr);
+    std::vector<VkPresentModeKHR> presentModes(presentModeCount);
+    vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, presentModes.data());
+
+    VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR; // default FIFO as always available
+    for (const auto& mode : presentModes) {
+        if (mode == VK_PRESENT_MODE_MAILBOX_KHR) {
+            presentMode = mode;
+            break;
+        }
+    }
+
+    // resolution of swapchain images
+    VkExtent2D extent = capabilities.currentExtent;
+
+    // one more than min for tripple buffering
+    uint32_t imageCount = capabilities.minImageCount + 1;
+    if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount) {
+        imageCount = capabilities.maxImageCount;
+    }
+
+    VkSwapchainCreateInfoKHR swapchainInfo {};
+    swapchainInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    swapchainInfo.surface = surface;
+    swapchainInfo.minImageCount = imageCount;
+    swapchainInfo.imageFormat = surfaceFormat.format;
+    surfaceFormat.colorSpace = surfaceFormat.colorSpace;
+    swapchainInfo.imageExtent = extent;
+    swapchainInfo.imageArrayLayers = 1;                                 // always 1 unless VR
+    swapchainInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;     // reder these as a frambuffer color output, so the final image, no post proccessing 
+    swapchainInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;         // one queue family owns the images, no concurrency with graphics and present queues
+    swapchainInfo.preTransform = capabilities.currentTransform;         // no rotation
+    swapchainInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;   // no transparency on window
+    swapchainInfo.presentMode = presentMode;
+    swapchainInfo.clipped = VK_TRUE;                                    // dont render pixels hidden by other windows
+    swapchainInfo.oldSwapchain = VK_NULL_HANDLE;                        // not replacing old swapchain. resising the widows requires recreating he swapcahin
+    
+    if (vkCreateSwapchainKHR(logicalDevice, &swapchainInfo, nullptr, &swapchain)) {
+        logErr("Failed to create swapchain");
+        std::exit(EXIT_FAILURE);
+    }
+
+    // get handles to swapchain images created by vulkan
+    vkGetSwapchainImagesKHR(logicalDevice, swapchain, &imageCount, nullptr);
+    std::vector<VkImage> swapchainImages(imageCount);
+    vkGetSwapchainImagesKHR(logicalDevice, swapchain, &imageCount, swapchainImages.data());
+
+    log("Swap chain created: ", extent.width, "x", extent.height, " with" ,imageCount, " images");
+}
+
+
 int main () {
     if (!glfwInit()) {
         logErr("Failed to initialize GLFW");
@@ -138,9 +214,12 @@ int main () {
         return EXIT_FAILURE;
     }
 
-    VkDevice device {};
+    VkPhysicalDevice physicalDevice {}; // for quering info about the hardware
+    VkDevice logicalDevice {};          // for the working connection to the GPU
     VkQueue queue {};
-    getGpuHandle(device, queue, surface, vkInstance);
+    getGpuHandle(logicalDevice, physicalDevice,queue, surface, vkInstance);
+    VkSwapchainKHR swapchain {};
+    buildSwapChain(swapchain, physicalDevice, logicalDevice, surface);
 
 
 
@@ -148,7 +227,8 @@ int main () {
         glfwPollEvents();
     }
 
-    vkDestroyDevice(device, nullptr);
+    vkDestroySwapchainKHR(logicalDevice, swapchain, nullptr);
+    vkDestroyDevice(logicalDevice, nullptr);
     vkDestroySurfaceKHR(vkInstance, surface, nullptr);
     vkDestroyInstance(vkInstance, nullptr);
     glfwDestroyWindow(window);
