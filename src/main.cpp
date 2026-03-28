@@ -40,7 +40,7 @@ inline void buildVkInstance(VkInstance& instance) {
     log("Vulkan instance created");
 }
 
-inline void buildSurface(VkSurfaceKHR& surface, VkDevice device, VkQueue queue ,VkInstance& instance) {
+inline void getGpuHandle(VkDevice& vkDevice, VkQueue& queue, const VkSurfaceKHR& surface ,const VkInstance& instance) {
     VkPhysicalDevice physicalDevice {}; // PhysicalDevice is just a handle to the hardware
     uint32_t count = 0;
     vkEnumeratePhysicalDevices(instance, &count, nullptr);
@@ -49,6 +49,8 @@ inline void buildSurface(VkSurfaceKHR& surface, VkDevice device, VkQueue queue ,
 
     // Find device that has a queue family supporting both graphic and present
     uint32_t graphicsFamily = 0;
+    //TODO: currenlty we just pick the first suitable one then move on. for my setup this gets my 5090 but will need to fix this at some point
+    // to hanle picking the best one via vkGetPhysicalDeviceProperties(device, &props)
     for (const auto& device : devices) {
         uint32_t queueFamilyCount = 0;
         vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
@@ -93,12 +95,12 @@ inline void buildSurface(VkSurfaceKHR& surface, VkDevice device, VkQueue queue ,
     deviceCreateInfo.enabledExtensionCount = 1;
     deviceCreateInfo.ppEnabledExtensionNames = extensions;
 
-    if(vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device) != VK_SUCCESS) {
+    if(vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &vkDevice) != VK_SUCCESS) {
         logErr("Failed to create logical device");
         std::exit(EXIT_FAILURE);
     }
 
-    vkGetDeviceQueue(device, graphicsFamily, 0, &queue);
+    vkGetDeviceQueue(vkDevice, graphicsFamily, 0, &queue);
     log("Logical device created");
 }
 
@@ -138,7 +140,7 @@ int main () {
 
     VkDevice device {};
     VkQueue queue {};
-    buildSurface(surface, device, queue, vkInstance);
+    getGpuHandle(device, queue, surface, vkInstance);
 
 
 
