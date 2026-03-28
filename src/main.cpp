@@ -10,15 +10,29 @@
 
 
 struct Vulkan {
+    //no items we dont need to manually clean up
+    VkQueue queue {};
+    VkFormat swapChainFormat {};    // VkFromat is a member of VKSurfaceFormatKHR that we use in buildSwapChain. 
+                                    //we only need .colorSpace from VkSurfaceFormat when building the swapchain
+    VkExtent2D extent {}; 
+
+    //members that need cleaned up
     VkInstance instance {};
     VkSurfaceKHR surface {};
     VkPhysicalDevice physicalDevice {}; // for quering info about the hardware
     VkDevice logicalDevice {};          // for the working connection to the GPU
-    VkQueue queue {};
     VkSwapchainKHR swapchain {};
     std::vector<VkImageView> swapchainImageViews;
+    VkRenderPass renderPass {};
+    std::vector<VkFramebuffer> frameBuffers {};
+
+
 
     void cleanUp() {
+        for (auto fb : frameBuffers) {
+            vkDestroyFramebuffer(logicalDevice, fb, nullptr);
+        }
+        vkDestroyRenderPass(logicalDevice, renderPass, nullptr);
         for (auto view : swapchainImageViews) {
             vkDestroyImageView(logicalDevice, view, nullptr);
         }
@@ -124,7 +138,7 @@ struct Vulkan {
         log("Logical device created");
         } 
    
-        void buildSwapChain() {
+    void buildSwapChain() {
         VkSurfaceCapabilitiesKHR capabilities {};
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities);
 
@@ -134,13 +148,14 @@ struct Vulkan {
         std::vector<VkSurfaceFormatKHR> formats(formatCount);
         vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, formats.data());
 
-        VkSurfaceFormatKHR surfaceFormat = formats[0];
+        VkSurfaceFormatKHR surfaceFormat = formats[0]; // default fallback if loops below fails to find preference
         for (const auto& f : formats) {
             if (f.format == VK_FORMAT_B8G8R8A8_SRGB && f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
-                surfaceFormat = f;
+                swapChainFormat = f.format;
                 break;
             }
         }
+        swapChainFormat = surfaceFormat.format;
 
         // pick present mode = MAILBOX (triple buffer) else FIFO (vsync)
         uint32_t presentModeCount;
@@ -157,7 +172,7 @@ struct Vulkan {
         }
 
         // resolution of swapchain images
-        VkExtent2D extent = capabilities.currentExtent;
+        extent = capabilities.currentExtent;
 
         // one more than min for tripple buffering
         uint32_t imageCount = capabilities.minImageCount + 1;
@@ -196,7 +211,7 @@ struct Vulkan {
         // -----Image Views------
         swapchainImageViews.resize(imageCount);
 
-        for (uint32_t i = 0; i < imageCount; i++) {
+        for (uint32_t i = 0; i < swapchainImageViews.size(); i++) {
             VkImageViewCreateInfo viewInfo {};
             viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
             viewInfo.image = swapchainImages[i];
@@ -219,6 +234,74 @@ struct Vulkan {
         }
         log("Image views created: ", imageCount);
 
+    }
+
+    // the render pass defines what slots expext what images and what properties those images have
+    void buildRenderPass() {
+        // descripe the swapchain image
+        // an attachment is a slot for an image, its confusing
+        VkAttachmentDescription colorAttachment {}; 
+        colorAttachment.format = swapChainFormat;
+        colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;    // no multisampling -> antialiasing 
+        colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;   // clear to a color at start
+        colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;     //keep the result so we can present it
+        colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;    // no stencil buffer
+        colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;  //dont care what was in the image before
+        colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;  //transition to presentable when done
+
+        VkAttachmentReference colorRef {};
+        colorRef.attachment = 0;
+        colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // best layout for writing color
+
+        VkSubpassDescription subpass {};
+        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.colorAttachmentCount = 1;
+        subpass.pColorAttachments = &colorRef;
+
+        // Synchronization: wait for the swap cahin to finish reading the image before writing to it
+        VkSubpassDependency dependency {};
+        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;    // "befor render pass"
+        dependency.dstSubpass = 0;                      //our subpass
+        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.srcAccessMask = 0;
+        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+        VkRenderPassCreateInfo renderPassInfo {};
+        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        renderPassInfo.attachmentCount = 1;
+        renderPassInfo.pAttachments = &colorAttachment;
+        renderPassInfo.subpassCount = 1;
+        renderPassInfo.pSubpasses = &subpass;
+        renderPassInfo.dependencyCount = 1;
+        renderPassInfo.pDependencies = &dependency;
+
+        if (vkCreateRenderPass(logicalDevice, &renderPassInfo, nullptr, &renderPass) != VK_SUCCESS) {
+            logErr("Failed to create render pass");
+            std::exit(EXIT_FAILURE);
+        }
+        log("Render pass created");
+    }
+
+    void buildFrameBuffers() {
+        frameBuffers.resize(swapchainImageViews.size());
+        for(uint32_t i = 0; i < swapchainImageViews.size(); i++) {
+            VkFramebufferCreateInfo frameBufferInfo {};
+            frameBufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            frameBufferInfo.renderPass = renderPass;
+            frameBufferInfo.attachmentCount = 1;
+            frameBufferInfo.pAttachments = &swapchainImageViews[i];
+            frameBufferInfo.width = extent.width;
+            frameBufferInfo.height = extent.height;
+            frameBufferInfo.layers = 1;
+
+            if (vkCreateFramebuffer(logicalDevice, &frameBufferInfo, nullptr, &frameBuffers[i]) != VK_SUCCESS) {
+                logErr("Failed to create framebuffer");
+                std::exit(EXIT_FAILURE);
+            }
+        }
+        log("Framebuffers created: ", frameBuffers.size());
     }
 
 };
@@ -258,6 +341,8 @@ int main () {
     }
     vk.buildGpuHandle();
     vk.buildSwapChain();
+    vk.buildRenderPass();
+    vk.buildFrameBuffers();
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
