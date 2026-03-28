@@ -31,6 +31,16 @@ src/
 5. **Lighting** — normals, diffuse/specular shading, fragment shader math
 6. **Textured floor + model** — image loading, samplers, descriptor sets, model loading
 
+## Known Issues
+
+### Linux compositor scaling causes oversized swap chain
+On Linux with fractional scaling, the compositor renders at 2x the logical resolution then downscales. A full-screen borderless window results in a ~5120x2806 swap chain instead of the native 3840x~2160. Potential fixes:
+- **Exclusive fullscreen** — pass monitor to `glfwCreateWindow` to bypass compositor
+- **Manual swap chain extent** — use `glfwGetVideoMode` native resolution instead of `capabilities.currentExtent`
+- **Render scaling** — render to a lower-res offscreen image and blit to the swap chain
+
+Not a priority while hardware can handle the extra pixels.
+
 ## Conventions
 
 - C++20, compiled with CMake 3.20+
