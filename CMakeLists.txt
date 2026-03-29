@@ -23,7 +23,11 @@ add_executable(renderer
 )
 
 target_include_directories(renderer PRIVATE src)
-target_link_libraries(renderer PRIVATE Vulkan::Vulkan glfw X11 Xrandr)
+target_link_libraries(renderer PRIVATE Vulkan::Vulkan glfw)
+
+if(LINUX)
+    target_link_libraries(renderer PRIVATE X11 Xrandr)
+endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     target_compile_definitions(renderer PRIVATE DEBUG)
