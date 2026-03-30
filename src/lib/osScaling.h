@@ -1,3 +1,4 @@
+#pragma once
 
 #if defined(__linux__)
 #include <X11/Xlib.h>
