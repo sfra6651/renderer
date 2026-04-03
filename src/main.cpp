@@ -16,8 +16,6 @@
 #include "lib/osScaling.h"
 #include "lib/utils.h"
 
-#define MAX_FRAMES_IN_FLIGHT 2
-
 //track the index of the queue family we get. when referencing the queue families we use this index to get it
 struct QueueFamilyIndices {
     std::optional<uint32_t> graphicsFamily;
@@ -145,7 +143,7 @@ struct App {
 
         vkQueuePresentKHR(presentQueue, &presentInfo);
 
-        currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+        currentFrame = (currentFrame + 1) % swapChainImages.size();
     }
 
     void mainLoop() {
@@ -157,7 +155,7 @@ struct App {
     }
 
     void cleanUp() {
-        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        for (int i = 0; i < swapChainImages.size(); i++) {
             vkDestroySemaphore(logicalDevice, imageAvailableSemaphores[i], nullptr);
             vkDestroySemaphore(logicalDevice, renderFinishedSemaphores[i], nullptr);
             vkDestroyFence(logicalDevice, inFlightFences[i], nullptr);
@@ -691,27 +689,27 @@ struct App {
         scissor.extent = swapChainExtent;
 
         // this lets us change the viewport and scissor at runtime
-        // std::vector<VkDynamicState> dynamicStates = {
-        //     VK_DYNAMIC_STATE_VIEWPORT,
-        //     VK_DYNAMIC_STATE_SCISSOR
-        // };
-        //
-        // VkPipelineDynamicStateCreateInfo dynamicState{};
-        // dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-        // dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
-        // dynamicState.pDynamicStates = dynamicStates.data();
-        //
-        // VkPipelineViewportStateCreateInfo viewportState{};
-        // viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-        // viewportState.viewportCount = 1;
-        // viewportState.scissorCount = 1;
+        std::vector<VkDynamicState> dynamicStates = {
+            VK_DYNAMIC_STATE_VIEWPORT,
+            VK_DYNAMIC_STATE_SCISSOR
+        };
+
+        VkPipelineDynamicStateCreateInfo dynamicState{};
+        dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+        dynamicState.pDynamicStates = dynamicStates.data();
 
         VkPipelineViewportStateCreateInfo viewportState{};
         viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
         viewportState.viewportCount = 1;
-        viewportState.pViewports = &viewport;
         viewportState.scissorCount = 1;
-        viewportState.pScissors = &scissor;
+
+        // VkPipelineViewportStateCreateInfo viewportState{};
+        // viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        // viewportState.viewportCount = 1;
+        // viewportState.pViewports = &viewport;
+        // viewportState.scissorCount = 1;
+        // viewportState.pScissors = &scissor;
 
         VkPipelineRasterizationStateCreateInfo rasterizer{};
         rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -766,7 +764,7 @@ struct App {
         pipelineInfo.pMultisampleState = &multisampling;
         pipelineInfo.pDepthStencilState = nullptr; // Optional
         pipelineInfo.pColorBlendState = &colorBlending;
-        // pipelineInfo.pDynamicState = &dynamicState;
+        pipelineInfo.pDynamicState = &dynamicState;
         pipelineInfo.layout = pipelineLayout;
         pipelineInfo.renderPass = renderPass;
         pipelineInfo.subpass = 0;
@@ -821,7 +819,7 @@ struct App {
 
 
     void createCommandBuffers() {
-        commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+        commandBuffers.resize(swapChainImages.size());
         VkCommandBufferAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         allocInfo.commandPool = commandPool;
@@ -882,9 +880,9 @@ struct App {
     }
 
     void createSyncObjects() {
-        imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-        renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
-        inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+        imageAvailableSemaphores.resize(swapChainImages.size());
+        renderFinishedSemaphores.resize(swapChainImages.size());
+        inFlightFences.resize(swapChainImages.size());
 
         VkSemaphoreCreateInfo semaphoreInfo {};
         semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -893,7 +891,7 @@ struct App {
         fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
         fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
-        for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        for (int i = 0; i < swapChainImages.size(); i++) {
             if (vkCreateSemaphore(logicalDevice, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i]) != VK_SUCCESS ||
                 vkCreateSemaphore(logicalDevice, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i]) != VK_SUCCESS ||
                 vkCreateFence(logicalDevice, &fenceInfo, nullptr, &inFlightFences[i]) != VK_SUCCESS
