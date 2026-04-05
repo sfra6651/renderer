@@ -20,10 +20,35 @@ FetchContent_MakeAvailable(glfw)
 
 add_executable(renderer
     src/main.cpp
+        src/myVulkanHelpers.h
 )
 
 target_include_directories(renderer PRIVATE src)
+target_compile_definitions(renderer PRIVATE VULKAN_HPP_NO_EXCEPTIONS VULKAN_HPP_NO_STRUCT_CONSTRUCTORS)
 target_link_libraries(renderer PRIVATE Vulkan::Vulkan glfw)
+
+# Slang shader compilation
+find_program(SLANGC_EXECUTABLE slangc REQUIRED)
+
+set(SHADER_SLANG_SOURCES ${CMAKE_SOURCE_DIR}/src/shaders/shader.slang)
+
+set(SHADERS_DIR ${CMAKE_SOURCE_DIR}/src/shaders)
+set(SLANG_SPV ${SHADERS_DIR}/slang.spv)
+
+add_custom_command(
+    OUTPUT ${SLANG_SPV}
+    COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SLANG_SOURCES}
+        -target spirv -profile spirv_1_4 -emit-spirv-directly
+        -fvk-use-entrypoint-name
+        -entry vertMain -entry fragMain
+        -o ${SLANG_SPV}
+    DEPENDS ${SHADER_SLANG_SOURCES}
+    COMMENT "Compiling Slang shaders"
+    VERBATIM
+)
+
+add_custom_target(shaders DEPENDS ${SLANG_SPV})
+add_dependencies(renderer shaders)
 
 if(LINUX)
     target_link_libraries(renderer PRIVATE X11 Xrandr)
