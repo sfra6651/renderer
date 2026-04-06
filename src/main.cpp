@@ -88,7 +88,7 @@ private:
 
     void drawFrame()
     {
-        auto fenceResult = logicalDevice.waitForFences(*inFlightFences[frameIndex], vk::True, UINT64_MAX);
+        auto fenceResult = logicalDevice.waitForFences(*inFlightFences[frameIndex], VK_TRUE, UINT64_MAX);
         if (fenceResult != vk::Result::eSuccess) {
             logErr("Failed to wait for fence!");
             std::exit(EXIT_FAILURE);
@@ -215,12 +215,7 @@ private:
         createInfo.enabledLayerCount = 0;
     #endif
 
-        auto instanceRV = context.createInstance(createInfo);
-        if (!instanceRV.has_value()) {
-            logErr("Failed to create Vulkan instance!");
-            std::exit(EXIT_FAILURE);
-        }
-        instance = std::move(instanceRV.value);
+        instance = vk::raii::Instance{ context, createInfo };
         log("Vulkan instance created");
     }
 
@@ -237,9 +232,8 @@ private:
 
     void pickPhysicalDevice()
     {
-        uint32_t count = 0;
         auto physicalDevices = instance.enumeratePhysicalDevices();
-        if (physicalDevices->empty()) {
+        if (physicalDevices.empty()) {
             logErr("Failed to find GPUs with Vulkan support");
             std::exit(EXIT_FAILURE);
         }
@@ -248,7 +242,7 @@ private:
         // stores a pair of score and device
         std::multimap<int, vk::raii::PhysicalDevice> candidates;
 
-        for (const auto& device : physicalDevices.value) {
+        for (const auto& device : physicalDevices) {
             uint64_t score = rateDevice(device, surface);
             candidates.insert(std::make_pair(score, device));
         }
@@ -276,7 +270,7 @@ private:
         for (uint64_t i = 0; i < queueFamilyProperties.size(); i++) {
             // require the queue to support both graphics and present
             if (queueFamilyProperties[i].queueFlags & vk::QueueFlagBits::eGraphics &&
-                physicalDevice.getSurfaceSupportKHR(i, surface).has_value()) {
+                physicalDevice.getSurfaceSupportKHR(i, surface)) {
                 queueFamilyIndex = i;
             }
         }
@@ -319,13 +313,7 @@ private:
             .ppEnabledExtensionNames = requiredExtensions.data()
         };
 
-        auto deviceRV = physicalDevice.createDevice(deviceCreateInfo);
-        if (!deviceRV.has_value()) {
-            logErr("Failed to create logical device!");
-            std::exit(EXIT_FAILURE);
-        }
-        logicalDevice = std::move(deviceRV.value);
-
+        logicalDevice = vk::raii::Device{ physicalDevice, deviceCreateInfo };
         queue = logicalDevice.getQueue(queueFamilyIndex, 0);
 
         log("Created logical device");
@@ -334,11 +322,11 @@ private:
 
     void createSwapChain()
     {
-        vk::SurfaceCapabilitiesKHR surfaceCapabilities = physicalDevice.getSurfaceCapabilitiesKHR(surface).value;
+        vk::SurfaceCapabilitiesKHR surfaceCapabilities = physicalDevice.getSurfaceCapabilitiesKHR(surface);
         swapChainExtent = chooseSwapExtent(surfaceCapabilities, window);
         uint32_t minImageCount = chooseSwapMinImageCount(surfaceCapabilities);
 
-        std::vector<vk::SurfaceFormatKHR> availableFormats = physicalDevice.getSurfaceFormatsKHR(surface).value;
+        std::vector<vk::SurfaceFormatKHR> availableFormats = physicalDevice.getSurfaceFormatsKHR(surface);
         swapChainSurfaceFormat = chooseSwapSurfaceFormat(availableFormats);
 
         SwapChainSupportDetails swapChainSupportDetails = querySwapChainSupport(physicalDevice, surface);
@@ -358,20 +346,10 @@ private:
             .clipped = true
         };
 
-        auto swapChainRV = logicalDevice.createSwapchainKHR(createInfo);
-        if (!swapChainRV.has_value()) {
-            logErr("Failed to create swap chain!");
-            std::exit(EXIT_FAILURE);
-        }
-        swapChain = std::move(swapChainRV.value);
+        swapChain = vk::raii::SwapchainKHR{ logicalDevice, createInfo };
         log("SwapChain created");
 
-        auto swapChainImagesRV = swapChain.getImages();
-        if (!swapChainImagesRV.has_value()) {
-            logErr("Failed to get swap chain images!");
-            std::exit(EXIT_FAILURE);
-        }
-        swapChainImages = std::move(swapChainImagesRV.value);
+        swapChainImages = swapChain.getImages();
     }
 
 
@@ -393,31 +371,26 @@ private:
 
         for (auto &image : swapChainImages) {
             imageViewCreateInfo.image = image;
-            auto result = logicalDevice.createImageView(imageViewCreateInfo);
-            if (!result.has_value()) {
-                // result.result gives you the vk::Result error code
-                throw std::runtime_error("failed to create image view");
-            }
-            swapChainImageViews.push_back(std::move(result.value));
+            swapChainImageViews.emplace_back(logicalDevice, imageViewCreateInfo);
         }
     }
 
 
     void createGraphicsPipeline()
     {
-        std::vector<char> shaderCode = readFile("../src/shaders/slang.spv");
+        std::vector<char> shaderCode = readFile("src/shaders/slang.spv");
         vk::raii::ShaderModule shaderModule = createShaderModule(logicalDevice, shaderCode);
 
 
         vk::PipelineShaderStageCreateInfo vertShaderStageInfo {
             .stage = vk::ShaderStageFlagBits::eVertex,
-            .module = shaderModule,
+            .module = *shaderModule,
             .pName = "vertMain"
         };
 
         vk::PipelineShaderStageCreateInfo fragShaderStageInfo {
             .stage = vk::ShaderStageFlagBits::eFragment,
-            .module = shaderModule,
+            .module = *shaderModule,
             .pName = "fragMain"
         };
         vk::PipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
@@ -455,22 +428,22 @@ private:
         };
 
         vk::PipelineRasterizationStateCreateInfo rasterizer {
-            .depthClampEnable = vk::False,
-            .rasterizerDiscardEnable = vk::False,
+            .depthClampEnable = VK_FALSE,
+            .rasterizerDiscardEnable = VK_FALSE,
             .polygonMode = vk::PolygonMode::eFill,
             .cullMode = vk::CullModeFlagBits::eBack,
             .frontFace = vk::FrontFace::eClockwise,
-            .depthBiasEnable = vk::False,
+            .depthBiasEnable = VK_FALSE,
             .lineWidth = 1.0f
         };
 
         vk::PipelineMultisampleStateCreateInfo multisampling {
             .rasterizationSamples = vk::SampleCountFlagBits::e1,
-            .sampleShadingEnable = vk::False
+            .sampleShadingEnable = VK_FALSE
         };
 
         vk::PipelineColorBlendAttachmentState colorBlendAttachment{
-            .blendEnable         = vk::True,
+            .blendEnable         = VK_TRUE,
             .srcColorBlendFactor = vk::BlendFactor::eSrcAlpha,
             .dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha,
             .colorBlendOp        = vk::BlendOp::eAdd,
@@ -481,7 +454,7 @@ private:
         };
 
         vk::PipelineColorBlendStateCreateInfo colorBlending {
-            .logicOpEnable = vk::False,
+            .logicOpEnable = VK_FALSE,
             .logicOp = vk::LogicOp::eCopy,
             .attachmentCount = 1,
             .pAttachments = &colorBlendAttachment
@@ -492,12 +465,7 @@ private:
             .pushConstantRangeCount = 0
         };
 
-        auto pipelineLayoutRV = logicalDevice.createPipelineLayout(pipelineLayoutInfo);
-        if (!pipelineLayoutRV.has_value()) {
-            logErr("Failed to create pipeline layout!");
-            std::exit(EXIT_FAILURE);
-        }
-        pipelineLayout = std::move(pipelineLayoutRV.value);
+        pipelineLayout = vk::raii::PipelineLayout{ logicalDevice, pipelineLayoutInfo };
         log("Created pipeline layout");
 
         vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
@@ -520,12 +488,7 @@ private:
             }
         };
 
-        auto pipelineRV = logicalDevice.createGraphicsPipeline(nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
-        if (!pipelineRV.has_value()) {
-            logErr("Failed to create graphics pipeline!");
-            std::exit(EXIT_FAILURE);
-        }
-        graphicsPipeline = std::move(pipelineRV.value);
+        graphicsPipeline = vk::raii::Pipeline{ logicalDevice, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>() };
         log("Created graphics pipeline");
     }
 
@@ -537,12 +500,7 @@ private:
             .queueFamilyIndex = queueFamilyIndex
         };
 
-        auto poolRV = logicalDevice.createCommandPool(poolInfo);
-        if (!poolRV.has_value()) {
-            logErr("Failed to create command pool!");
-            std::exit(EXIT_FAILURE);
-        }
-        commandPool = std::move(poolRV.value);
+        commandPool = vk::raii::CommandPool{ logicalDevice, poolInfo };
         log("Created command pool");
     }
 
@@ -555,12 +513,7 @@ private:
             .commandBufferCount = static_cast<uint32_t>(swapChainImages.size()),
         };
 
-        auto cmdBufferRV = logicalDevice.allocateCommandBuffers(allocInfo);
-        if (!cmdBufferRV.has_value()) {
-            logErr("Failed to allocate command buffer!");
-            std::exit(EXIT_FAILURE);
-        }
-        commandBuffers = std::move(cmdBufferRV.value);
+        commandBuffers = vk::raii::CommandBuffers{ logicalDevice, allocInfo };
         log("Created command buffers");
     }
 
@@ -673,26 +626,9 @@ private:
     void createSyncObjects()
     {
         for (uint32_t i = 0; i < swapChainImages.size(); i++) {
-            auto presentCompleteSemaphoreRV = logicalDevice.createSemaphore(vk::SemaphoreCreateInfo());
-            if (!presentCompleteSemaphoreRV.has_value()) {
-                logErr("Failed to create present complete semaphore!");
-                std::exit(EXIT_FAILURE);
-            }
-            presentCompleteSemaphores.push_back(std::move(presentCompleteSemaphoreRV.value));
-
-            auto renderFinishedSemaphoreRV = logicalDevice.createSemaphore(vk::SemaphoreCreateInfo());
-            if (!renderFinishedSemaphoreRV.has_value()) {
-                logErr("Failed to create render finished semaphore!");
-                std::exit(EXIT_FAILURE);
-            }
-            renderFinishedSemaphores.push_back(std::move(renderFinishedSemaphoreRV.value));
-
-            auto drawFenceRV = logicalDevice.createFence(vk::FenceCreateInfo({.flags = vk::FenceCreateFlagBits::eSignaled}));
-            if (!drawFenceRV.has_value()) {
-                logErr("Failed to create draw fence!");
-                std::exit(EXIT_FAILURE);
-            }
-            inFlightFences.push_back(std::move(drawFenceRV.value));
+            presentCompleteSemaphores.emplace_back(logicalDevice, vk::SemaphoreCreateInfo());
+            renderFinishedSemaphores.emplace_back(logicalDevice, vk::SemaphoreCreateInfo());
+            inFlightFences.emplace_back(logicalDevice, vk::FenceCreateInfo({.flags = vk::FenceCreateFlagBits::eSignaled}));
         }
     }
 };

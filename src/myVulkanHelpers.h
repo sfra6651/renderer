@@ -43,13 +43,10 @@ inline bool checkValidationLayerSupport() {
 }
 
 inline bool checkDeviceExtensionSupport(const vk::raii::PhysicalDevice& device, const std::vector<const char*>& requiredExtensions) {
-    auto deviceExtensionsR = device.enumerateDeviceExtensionProperties();
-    if (!deviceExtensionsR.has_value()) {
-        return false;
-    }
+    auto deviceExtensions = device.enumerateDeviceExtensionProperties();
     for (const char* requiredExtension : requiredExtensions) {
         bool found = false;
-        for (const auto& ext : deviceExtensionsR.value) {
+        for (const auto& ext : deviceExtensions) {
             if (strcmp(ext.extensionName, requiredExtension) == 0) {
                 found = true;
                 break;
@@ -64,18 +61,9 @@ inline bool checkDeviceExtensionSupport(const vk::raii::PhysicalDevice& device, 
 
 inline SwapChainSupportDetails querySwapChainSupport(const vk::raii::PhysicalDevice& device, const vk::raii::SurfaceKHR& surface) {
     SwapChainSupportDetails details;
-    auto surfaceCapabilitiesRV = device.getSurfaceCapabilitiesKHR(surface);
-    if (surfaceCapabilitiesRV.has_value()) {
-       details.capabilities = surfaceCapabilitiesRV.value;
-    }
-    auto surfaceFormatsRV = device.getSurfaceFormatsKHR(surface);
-    if (surfaceFormatsRV.has_value()) {
-        details.availableFormats = surfaceFormatsRV.value;
-    }
-    auto presentModesRV = device.getSurfacePresentModesKHR(surface);
-    if (presentModesRV.has_value()) {
-       details.availablePresentModes = presentModesRV.value;
-    }
+    details.capabilities = device.getSurfaceCapabilitiesKHR(surface);
+    details.availableFormats = device.getSurfaceFormatsKHR(surface);
+    details.availablePresentModes = device.getSurfacePresentModesKHR(surface);
 
     return details;
 };
@@ -93,7 +81,7 @@ inline bool isDeviceSuitable(const vk::raii::PhysicalDevice& device, const vk::r
     auto queueFamilies = device.getQueueFamilyProperties();
     for (uint32_t i = 0; i < queueFamilies.size(); i++) {
         if (queueFamilies[i].queueFlags & vk::QueueFlagBits::eGraphics &&
-            device.getSurfaceSupportKHR(i, surface).has_value()) {
+            device.getSurfaceSupportKHR(i, surface)) {
             suitableQueueFamily = true;
         }
     }
@@ -202,13 +190,7 @@ uint32_t chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const &surfaceCapabi
         .pCode = reinterpret_cast<const uint32_t*>(code.data())
     };
 
-    auto shaderModuleRV = logicalDevice.createShaderModule(createInfo);
-    if (!shaderModuleRV.has_value()) {
-        logErr("Failed to create shader module!");
-        std::exit(EXIT_FAILURE);
-    }
-
-    return std::move(shaderModuleRV.value);
+    return vk::raii::ShaderModule{ logicalDevice, createInfo };
 }
 
 

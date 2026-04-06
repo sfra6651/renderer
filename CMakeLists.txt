@@ -13,18 +13,25 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/glfw/glfw.git
     GIT_TAG 3.4
 )
+FetchContent_Declare(
+    VulkanHeaders
+    GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
+    GIT_TAG v1.4.313
+)
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(glfw)
+FetchContent_Populate(VulkanHeaders)
 
 add_executable(renderer
     src/main.cpp
         src/myVulkanHelpers.h
 )
 
+target_include_directories(renderer BEFORE PRIVATE ${vulkanheaders_SOURCE_DIR}/include)
 target_include_directories(renderer PRIVATE src)
-target_compile_definitions(renderer PRIVATE VULKAN_HPP_NO_EXCEPTIONS VULKAN_HPP_NO_STRUCT_CONSTRUCTORS)
+target_compile_definitions(renderer PRIVATE VULKAN_HPP_NO_STRUCT_CONSTRUCTORS)
 target_link_libraries(renderer PRIVATE Vulkan::Vulkan glfw)
 
 # Slang shader compilation
