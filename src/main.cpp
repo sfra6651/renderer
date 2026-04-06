@@ -116,6 +116,7 @@ private:
         }
         logicalDevice.resetFences(*inFlightFences[frameIndex]);
 
+        commandBuffers[frameIndex].reset();
         recordCommandBuffer(imageIndex);
 
         vk::PipelineStageFlags waitDestinationStageMask( vk::PipelineStageFlagBits::eColorAttachmentOutput );
