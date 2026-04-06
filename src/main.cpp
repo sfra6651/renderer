@@ -96,6 +96,13 @@ private:
         logicalDevice.resetFences(*inFlightFences[frameIndex]);
 
         auto [result, imageIndex] = swapChain.acquireNextImage(UINT64_MAX, *presentCompleteSemaphores[frameIndex], nullptr);
+        if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR) {
+            recreateSwapChain();
+            return;
+        } else if (result != vk::Result::eSuccess) {
+            logErr("Failed to acquire swap chain image!");
+            std::exit(EXIT_FAILURE);
+        }
 
         recordCommandBuffer(imageIndex);
 
@@ -123,6 +130,22 @@ private:
         result = queue.presentKHR(presentInfoKHR);
 
         frameIndex = (frameIndex + 1) % swapChainImages.size();
+    }
+
+    void cleanupSwapChain()
+    {
+        swapChainImageViews.clear();
+        swapChain = nullptr;
+    }
+
+    void recreateSwapChain()
+    {
+        logicalDevice.waitIdle();
+
+        cleanupSwapChain();
+        createSwapChain();
+        createImageViews();
+        log("Swap chain recreated");
     }
 
 

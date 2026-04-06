@@ -1,10 +1,10 @@
 # Vulkan Renderer
 
-Learning project building a Vulkan rendering pipeline and camera system from scratch in C++20, following along with [vulkan-tutorial.com](https://vulkan-tutorial.com). The goal is to deeply understand every stage of the GPU rendering pipeline and how the camera transforms world space to screen space — no magic, no hidden state.
+Learning project building a Vulkan rendering pipeline and camera system from scratch in C++20, following along with the [Vulkan Tutorial on vulkan.org](https://docs.vulkan.org/tutorial/latest/00_Introduction.html). The goal is to deeply understand every stage of the GPU rendering pipeline and how the camera transforms world space to screen space — no magic, no hidden state.
 
 ## Learning Project
 
-The user is following the vulkan-tutorial.com tutorial and learning Vulkan and GPU rendering from the ground up. When they ask how to do something, **guide them through the approach first** rather than jumping straight to implementation. Explain the concepts, trade-offs, and reasoning so they can make informed decisions and learn. Only write code when explicitly asked to implement.
+The user is following the modern Vulkan tutorial on vulkan.org (which uses Vulkan 1.3 conventions and dynamic rendering) and learning Vulkan and GPU rendering from the ground up. When they ask how to do something, **guide them through the approach first** rather than jumping straight to implementation. Explain the concepts, trade-offs, and reasoning so they can make informed decisions and learn. Only write code when explicitly asked to implement.
 
 ## Build & Run
 
