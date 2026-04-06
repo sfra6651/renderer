@@ -24,7 +24,7 @@ static std::vector<char> readFile(const std::string& path) {
     if (!file.is_open()) {
         log("CWD: ",std::filesystem::current_path());
         logErr("Failed to open file:", path);
-        throw std::runtime_error("");
+        std::exit(EXIT_FAILURE);
     }
     size_t fileSize = (size_t) file.tellg();
     std::vector<char> buffer(fileSize);

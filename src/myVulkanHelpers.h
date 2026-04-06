@@ -1,6 +1,10 @@
 #pragma once
 
+#include <expected>
+#define GLFW_INCLUDE_VULKAN
+#include<GLFW/glfw3.h> 
 #include <vulkan/vulkan_raii.hpp>
+#include "lib/utils.h"
 
 // debug
 const std::vector<const char*> validationLayers = {
@@ -43,7 +47,8 @@ inline bool checkValidationLayerSupport() {
 }
 
 inline bool checkDeviceExtensionSupport(const vk::raii::PhysicalDevice& device, const std::vector<const char*>& requiredExtensions) {
-    auto deviceExtensions = device.enumerateDeviceExtensionProperties();
+    auto result = device.enumerateDeviceExtensionProperties();
+    auto deviceExtensions = std::move(result);
     for (const char* requiredExtension : requiredExtensions) {
         bool found = false;
         for (const auto& ext : deviceExtensions) {
@@ -81,7 +86,7 @@ inline bool isDeviceSuitable(const vk::raii::PhysicalDevice& device, const vk::r
     auto queueFamilies = device.getQueueFamilyProperties();
     for (uint32_t i = 0; i < queueFamilies.size(); i++) {
         if (queueFamilies[i].queueFlags & vk::QueueFlagBits::eGraphics &&
-            device.getSurfaceSupportKHR(i, surface)) {
+            device.getSurfaceSupportKHR(i, surface) == VK_TRUE) {
             suitableQueueFamily = true;
         }
     }
@@ -190,7 +195,12 @@ uint32_t chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const &surfaceCapabi
         .pCode = reinterpret_cast<const uint32_t*>(code.data())
     };
 
-    return vk::raii::ShaderModule{ logicalDevice, createInfo };
+    auto result = logicalDevice.createShaderModule(createInfo);
+    if (!result) {
+        logErr("Failed to create shader module:", vk::to_string(result.error()));
+        std::exit(EXIT_FAILURE);
+    }
+    return std::move(result.value());
 }
 
 

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(renderer LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -31,7 +31,11 @@ add_executable(renderer
 
 target_include_directories(renderer BEFORE PRIVATE ${vulkanheaders_SOURCE_DIR}/include)
 target_include_directories(renderer PRIVATE src)
-target_compile_definitions(renderer PRIVATE VULKAN_HPP_NO_STRUCT_CONSTRUCTORS)
+target_compile_definitions(renderer PRIVATE
+    VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
+    VULKAN_HPP_NO_EXCEPTIONS
+    VULKAN_HPP_ASSERT_ON_RESULT=
+)
 target_link_libraries(renderer PRIVATE Vulkan::Vulkan glfw)
 
 # Slang shader compilation
