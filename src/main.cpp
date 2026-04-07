@@ -1,3 +1,4 @@
+#include <array>
 #include <algorithm>
 #include <cstdlib>
 #include <cstdint>
@@ -10,6 +11,7 @@
 #include <vulkan/vulkan_raii.hpp>
 #define GLFW_INCLUDE_VULKAN
 #include<GLFW/glfw3.h> //pulls in vulkan because of GLFW_INCLUDE_VULKAN flag
+#include <glm/glm.hpp>
 #include <vector>
 
 #include "lib/osScaling.h"
@@ -25,6 +27,29 @@ T vkUnwrap(std::expected<T, vk::Result> result, const char* msg) {
     return std::move(result.value());
 }
 
+struct Vertex
+{
+    glm::vec2 pos;
+    glm::vec3 color;
+
+    static vk::VertexInputBindingDescription getBindingDescription()
+    {
+        return {.binding = 0, .stride = sizeof(Vertex), .inputRate = vk::VertexInputRate::eVertex};
+    }
+
+    static std::array<vk::VertexInputAttributeDescription, 2> getAttributeDescriptions()
+    {
+        return {{{.location = 0, .binding = 0, .format = vk::Format::eR32G32Sfloat, .offset = offsetof(Vertex, pos)},
+                 {.location = 1, .binding = 0, .format = vk::Format::eR32G32B32Sfloat, .offset = offsetof(Vertex, color)}}};
+    }
+};
+
+
+const std::vector<Vertex> vertices = {
+    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+};
 
 
 class App {
@@ -58,6 +83,8 @@ private:
     std::vector<vk::raii::ImageView> swapChainImageViews {};
     vk::raii::PipelineLayout pipelineLayout = nullptr;
     vk::raii::Pipeline graphicsPipeline = nullptr;
+    vk::raii::Buffer vertexBuffer = nullptr;
+    vk::raii::DeviceMemory vertexBufferMemory = nullptr;
     vk::raii::CommandPool commandPool = nullptr;
     std::vector<vk::raii::CommandBuffer> commandBuffers {};
 
@@ -80,6 +107,7 @@ private:
         createSwapChain();
         createImageViews();
         createGraphicsPipeline();
+        createVertexBuffer();
         createCommandPool();
         createCommandBuffers();
         createSyncObjects();
@@ -447,21 +475,15 @@ private:
             .topology = vk::PrimitiveTopology::eTriangleList
         };
 
-        vk::Viewport viewport {
-            0.0f,
-            0.0f,
-            static_cast<float>(swapChainExtent.width),
-            static_cast<float>(swapChainExtent.height),
-            0.0f,
-            1.0f
-        };
 
-        vk::Rect2D scissor {
-            vk::Offset2D { 0, 0 },
-            swapChainExtent
-        };
+        auto bindingDescription = Vertex::getBindingDescription();
+        auto attributeDescriptions = Vertex::getAttributeDescriptions();
 
-        vk::PipelineVertexInputStateCreateInfo vertexInputInfo {};
+        vk::PipelineVertexInputStateCreateInfo vertexInputInfo {
+            .vertexBindingDescriptionCount = 1,
+           .pVertexBindingDescriptions = &bindingDescription,
+           .vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size()),
+           .pVertexAttributeDescriptions = attributeDescriptions.data()};
 
         vk::PipelineViewportStateCreateInfo viewportState {
             .viewportCount = 1,
@@ -533,6 +555,29 @@ private:
         log("Created graphics pipeline");
     }
 
+    void createVertexBuffer() {
+       vk::BufferCreateInfo bufferInfo {
+           .size = vertices.size() * sizeof(Vertex),
+           .usage = vk::BufferUsageFlagBits::eVertexBuffer,
+           .sharingMode = vk::SharingMode::eExclusive
+       };
+
+        vertexBuffer = vkUnwrap(logicalDevice.createBuffer(bufferInfo), "Failed to create vertex buffer");
+
+        vk::MemoryRequirements memRequirements = vertexBuffer.getMemoryRequirements();
+
+        vk::MemoryAllocateInfo memoryAllocateInfo {
+            .allocationSize  = memRequirements.size,
+            .memoryTypeIndex = findMemoryType(physicalDevice, memRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent)};
+
+        vertexBufferMemory = vkUnwrap(logicalDevice.allocateMemory(memoryAllocateInfo), "Failed to allocate vertex buffer memory");
+
+        vertexBuffer.bindMemory( *vertexBufferMemory, 0 );
+
+        void* data = vertexBufferMemory.mapMemory(0, bufferInfo.size);
+        memcpy(data, vertices.data(), bufferInfo.size);
+        vertexBufferMemory.unmapMemory();
+    }
 
     void createCommandPool()
     {
@@ -635,6 +680,8 @@ private:
         cmd.beginRendering(renderingInfo);
 
         cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
+
+        cmd.bindVertexBuffers(0, *vertexBuffer, {0});
 
         cmd.setViewport(
             0,
