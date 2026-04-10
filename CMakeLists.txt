@@ -18,10 +18,15 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/KhronosGroup/Vulkan-Headers.git
     GIT_TAG v1.4.313
 )
+FetchContent_Declare(
+    glm
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG 1.0.1
+)
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(glfw)
+FetchContent_MakeAvailable(glfw glm)
 FetchContent_Populate(VulkanHeaders)
 
 add_executable(renderer
@@ -33,10 +38,8 @@ target_include_directories(renderer BEFORE PRIVATE ${vulkanheaders_SOURCE_DIR}/i
 target_include_directories(renderer PRIVATE src)
 target_compile_definitions(renderer PRIVATE
     VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
-    VULKAN_HPP_NO_EXCEPTIONS
-    VULKAN_HPP_ASSERT_ON_RESULT=
 )
-target_link_libraries(renderer PRIVATE Vulkan::Vulkan glfw)
+target_link_libraries(renderer PRIVATE Vulkan::Vulkan glfw glm::glm)
 
 # Slang shader compilation
 find_program(SLANGC_EXECUTABLE slangc REQUIRED)

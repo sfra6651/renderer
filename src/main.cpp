@@ -1,9 +1,9 @@
+#include "vulkan/vulkan.hpp"
 #include <array>
 #include <algorithm>
 #include <cstdlib>
 #include <cstdint>
 #include <cstring>
-#include <expected>
 #include <limits>
 #include <map>
 #include <optional>
@@ -17,15 +17,6 @@
 #include "lib/osScaling.h"
 #include "lib/utils.h"
 #include "myVulkanHelpers.h"
-
-template<typename T>
-T vkUnwrap(std::expected<T, vk::Result> result, const char* msg) {
-    if (!result) {
-        logErr(msg, ":", vk::to_string(result.error()));
-        std::exit(EXIT_FAILURE);
-    }
-    return std::move(result.value());
-}
 
 struct Vertex
 {
@@ -132,15 +123,13 @@ private:
             std::exit(EXIT_FAILURE);
         }
 
-        auto [result, imageIndex] = swapChain.acquireNextImage(UINT64_MAX, *presentCompleteSemaphores[frameIndex], nullptr);
-        if (result == vk::Result::eErrorOutOfDateKHR)
-        {
+        uint32_t imageIndex;
+        try {
+            auto [acquireResult, idx] = swapChain.acquireNextImage(UINT64_MAX, *presentCompleteSemaphores[frameIndex], nullptr);
+            imageIndex = idx;
+        } catch (const vk::OutOfDateKHRError&) {
             recreateSwapChain();
             return;
-        }
-        if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR) {
-            logErr("Failed to acquire swap chain image:", vk::to_string(result));
-            std::exit(EXIT_FAILURE);
         }
         logicalDevice.resetFences(*inFlightFences[frameIndex]);
 
@@ -168,14 +157,15 @@ private:
 
         queue.submit(submitInfo, *inFlightFences[frameIndex]);
 
-        result = queue.presentKHR(presentInfoKHR);
-        if ((result == vk::Result::eSuboptimalKHR) || (result == vk::Result::eErrorOutOfDateKHR || frameBufferResized)) {
+        vk::Result presentResult = vk::Result::eSuccess;
+        try {
+            presentResult = queue.presentKHR(presentInfoKHR);
+        } catch (const vk::OutOfDateKHRError&) {
+            presentResult = vk::Result::eErrorOutOfDateKHR;
+        }
+        if (presentResult == vk::Result::eSuboptimalKHR || presentResult == vk::Result::eErrorOutOfDateKHR || frameBufferResized) {
             frameBufferResized = false;
             recreateSwapChain();
-        }
-        else {
-            // There are no other success codes than eSuccess; on any error code, presentKHR already threw an exception.
-            assert(result == vk::Result::eSuccess);
         }
 
         frameIndex = (frameIndex + 1) % MAX_FRAMES_IN_FLIGHT;
@@ -262,7 +252,7 @@ private:
             .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
             .pEngineName = "No Engine",
             .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-            .apiVersion = vk::ApiVersion14,
+            .apiVersion = vk::ApiVersion13,
         };
 
         uint32_t glfwExtensionCount = 0;
@@ -281,7 +271,7 @@ private:
         createInfo.enabledLayerCount = 0;
     #endif
 
-        instance = vkUnwrap(context.createInstance(createInfo), "Failed to create Vulkan instance");
+        instance = vk::raii::Instance(context, createInfo);
         log("Vulkan instance created");
     }
 
@@ -299,7 +289,7 @@ private:
 
     void pickPhysicalDevice()
     {
-        auto physicalDevices = vkUnwrap(instance.enumeratePhysicalDevices(), "Failed to enumerate physical devices");
+        auto physicalDevices = instance.enumeratePhysicalDevices();
         if (physicalDevices.empty()) {
             logErr("Failed to find GPUs with Vulkan support");
             std::exit(EXIT_FAILURE);
@@ -380,9 +370,9 @@ private:
             .ppEnabledExtensionNames = requiredExtensions.data()
         };
 
-        logicalDevice = vkUnwrap(physicalDevice.createDevice(deviceCreateInfo), "Failed to create logical device");
+        logicalDevice = vk::raii::Device(physicalDevice, deviceCreateInfo);
 
-        queue = vkUnwrap(logicalDevice.getQueue(queueFamilyIndex, 0), "Failed to create queue");
+        queue = vk::raii::Queue(logicalDevice, queueFamilyIndex, 0);
 
         log("Created logical device");
 
@@ -415,7 +405,7 @@ private:
             .clipped = true
         };
 
-        swapChain = vkUnwrap(logicalDevice.createSwapchainKHR(createInfo), "Failed to create swap chain");
+        swapChain = vk::raii::SwapchainKHR(logicalDevice, createInfo);
         log("SwapChain created");
 
         swapChainImages = swapChain.getImages();
@@ -440,7 +430,7 @@ private:
 
         for (auto &image : swapChainImages) {
             imageViewCreateInfo.image = image;
-            swapChainImageViews.push_back(vkUnwrap(logicalDevice.createImageView(imageViewCreateInfo), "Failed to create image view"));
+            swapChainImageViews.emplace_back(logicalDevice, imageViewCreateInfo);
         }
     }
 
@@ -528,7 +518,7 @@ private:
             .pushConstantRangeCount = 0
         };
 
-        pipelineLayout = vkUnwrap(logicalDevice.createPipelineLayout(pipelineLayoutInfo), "Failed to create pipeline layout");
+        pipelineLayout = vk::raii::PipelineLayout(logicalDevice, pipelineLayoutInfo);
         log("Created pipeline layout");
 
         vk::StructureChain<vk::GraphicsPipelineCreateInfo, vk::PipelineRenderingCreateInfo> pipelineCreateInfoChain = {
@@ -551,31 +541,76 @@ private:
             }
         };
 
-        graphicsPipeline = vkUnwrap(logicalDevice.createGraphicsPipeline(nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>()), "Failed to create graphics pipeline");
+        graphicsPipeline = vk::raii::Pipeline(logicalDevice, nullptr, pipelineCreateInfoChain.get<vk::GraphicsPipelineCreateInfo>());
         log("Created graphics pipeline");
     }
 
-    void createVertexBuffer() {
-       vk::BufferCreateInfo bufferInfo {
-           .size = vertices.size() * sizeof(Vertex),
-           .usage = vk::BufferUsageFlagBits::eVertexBuffer,
-           .sharingMode = vk::SharingMode::eExclusive
-       };
+    void createBuffer(
+        vk::DeviceSize size,
+        vk::BufferUsageFlags usage,
+        vk::MemoryPropertyFlags properties,
+        vk::raii::Buffer& buffer,
+        vk::raii::DeviceMemory& bufferMemory
+    ) {
+        vk::BufferCreateInfo bufferInfo { 
+            .size = size,
+            .usage = usage,
+            .sharingMode = vk::SharingMode::eExclusive 
+        };
 
-        vertexBuffer = vkUnwrap(logicalDevice.createBuffer(bufferInfo), "Failed to create vertex buffer");
+        buffer = vk::raii::Buffer(logicalDevice, bufferInfo);
 
-        vk::MemoryRequirements memRequirements = vertexBuffer.getMemoryRequirements();
+        vk::MemoryRequirements memRequirements = buffer.getMemoryRequirements();
+        vk::MemoryAllocateInfo allocInfo {
+            .allocationSize = memRequirements.size,
+            .memoryTypeIndex = findMemoryType(physicalDevice ,memRequirements.memoryTypeBits, properties)
+        };
 
-        vk::MemoryAllocateInfo memoryAllocateInfo {
-            .allocationSize  = memRequirements.size,
-            .memoryTypeIndex = findMemoryType(physicalDevice, memRequirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent)};
+        bufferMemory = vk::raii::DeviceMemory(logicalDevice, allocInfo);
+        buffer.bindMemory(*bufferMemory, 0);
+    }
 
-        vertexBufferMemory = vkUnwrap(logicalDevice.allocateMemory(memoryAllocateInfo), "Failed to allocate vertex buffer memory");
 
-        vertexBuffer.bindMemory( *vertexBufferMemory, 0 );
+    void copyBuffer(vk::raii::Buffer& stagingBuffer, vk::raii::Buffer& vertexBuffer, uint32_t stagingInfoSize) 
+    {
+        
+    }
 
-        void* data = vertexBufferMemory.mapMemory(0, bufferInfo.size);
-        memcpy(data, vertices.data(), bufferInfo.size);
+
+    void createVertexBuffer() 
+    {
+        vk::DeviceSize bufferSize = sizeof(Vertex) * vertices.size();
+
+        vk::BufferCreateInfo stagingInfo{ .size = bufferSize, .usage = vk::BufferUsageFlagBits::eTransferSrc, .sharingMode = vk::SharingMode::eExclusive };
+        vk::raii::Buffer stagingBuffer(logicalDevice, stagingInfo);
+        vk::raii::DeviceMemory stagingBufferMemory = nullptr;
+
+        createBuffer(
+            bufferSize,
+            vk::BufferUsageFlagBits::eTransferSrc,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+            stagingBuffer,
+            stagingBufferMemory
+        );
+
+        void* dataStaging = stagingBufferMemory.mapMemory(0, stagingInfo.size);
+        memcpy(dataStaging, vertices.data(), stagingInfo.size);
+        stagingBufferMemory.unmapMemory();
+
+        createBuffer(
+            bufferSize,
+            vk::BufferUsageFlagBits::eVertexBuffer,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+            vertexBuffer,
+            vertexBufferMemory
+        );
+
+        copyBuffer(stagingBuffer, vertexBuffer, stagingInfo.size);
+
+        vertexBufferMemory.unmapMemory();
+
+        void* data = vertexBufferMemory.mapMemory(0, bufferSize);
+        memcpy(data, vertices.data(), bufferSize);
         vertexBufferMemory.unmapMemory();
     }
 
@@ -586,7 +621,7 @@ private:
             .queueFamilyIndex = queueFamilyIndex
         };
 
-        commandPool = vkUnwrap(logicalDevice.createCommandPool(poolInfo), "Failed to create command pool");
+        commandPool = vk::raii::CommandPool(logicalDevice, poolInfo);
         log("Created command pool");
     }
 
@@ -599,7 +634,7 @@ private:
             .commandBufferCount = MAX_FRAMES_IN_FLIGHT,
         };
 
-        commandBuffers = vkUnwrap(logicalDevice.allocateCommandBuffers(allocInfo), "Failed to allocate command buffers");
+        commandBuffers = vk::raii::CommandBuffers(logicalDevice, allocInfo);
         log("Created command buffers");
     }
 
@@ -720,7 +755,7 @@ private:
     {
         renderFinishedSemaphores.clear();
         for (uint32_t i = 0; i < swapChainImages.size(); i++) {
-            renderFinishedSemaphores.push_back(vkUnwrap(logicalDevice.createSemaphore(vk::SemaphoreCreateInfo()), "Failed to create semaphore"));
+            renderFinishedSemaphores.emplace_back(logicalDevice, vk::SemaphoreCreateInfo{});
         }
     }
 
@@ -728,8 +763,8 @@ private:
     {
         createRenderFinishedSemaphores();
         for (uint32_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-            presentCompleteSemaphores.push_back(vkUnwrap(logicalDevice.createSemaphore(vk::SemaphoreCreateInfo()), "Failed to create semaphore"));
-            inFlightFences.push_back(vkUnwrap(logicalDevice.createFence({.flags = vk::FenceCreateFlagBits::eSignaled}), "Failed to create fence"));
+            presentCompleteSemaphores.emplace_back(logicalDevice, vk::SemaphoreCreateInfo{});
+            inFlightFences.emplace_back(logicalDevice, vk::FenceCreateInfo{.flags = vk::FenceCreateFlagBits::eSignaled});
         }
     }
 };

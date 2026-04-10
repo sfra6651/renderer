@@ -1,8 +1,7 @@
 #pragma once
 
-#include <expected>
 #define GLFW_INCLUDE_VULKAN
-#include<GLFW/glfw3.h> 
+#include<GLFW/glfw3.h>
 #include <vulkan/vulkan_raii.hpp>
 #include "lib/utils.h"
 
@@ -47,8 +46,7 @@ inline bool checkValidationLayerSupport() {
 }
 
 inline bool checkDeviceExtensionSupport(const vk::raii::PhysicalDevice& device, const std::vector<const char*>& requiredExtensions) {
-    auto result = device.enumerateDeviceExtensionProperties();
-    auto deviceExtensions = std::move(result);
+    auto deviceExtensions = device.enumerateDeviceExtensionProperties();
     for (const char* requiredExtension : requiredExtensions) {
         bool found = false;
         for (const auto& ext : deviceExtensions) {
@@ -189,18 +187,12 @@ uint32_t chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const &surfaceCapabi
     return minImageCount;
 }
 
-[[nodiscard]] inline vk::raii::ShaderModule createShaderModule(const vk::raii::Device& logicalDevice ,const std::vector<char>& code) {
+[[nodiscard]] inline vk::raii::ShaderModule createShaderModule(const vk::raii::Device& logicalDevice, const std::vector<char>& code) {
     vk::ShaderModuleCreateInfo createInfo {
         .codeSize = code.size() * sizeof(char),
         .pCode = reinterpret_cast<const uint32_t*>(code.data())
     };
-
-    auto result = logicalDevice.createShaderModule(createInfo);
-    if (!result) {
-        logErr("Failed to create shader module:", vk::to_string(result.error()));
-        std::exit(EXIT_FAILURE);
-    }
-    return std::move(result.value());
+    return vk::raii::ShaderModule(logicalDevice, createInfo);
 }
 
 
