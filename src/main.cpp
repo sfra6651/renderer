@@ -1,6 +1,7 @@
 #include "vulkan/vulkan.hpp"
 #include <array>
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <cstdint>
 #include <cstring>
@@ -12,6 +13,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include<GLFW/glfw3.h> //pulls in vulkan because of GLFW_INCLUDE_VULKAN flag
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <vector>
 
 #include "lib/osScaling.h"
@@ -36,11 +38,21 @@ struct Vertex
     }
 };
 
+struct UniformBufferObject {
+    glm::mat4 model;
+    glm::mat4 view;
+    glm::mat4 proj;
+};
 
 const std::vector<Vertex> vertices = {
-    {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+};
+
+const std::vector<uint16_t> indices = {
+    0, 1, 2, 2, 3, 0
 };
 
 
@@ -66,17 +78,29 @@ private:
     vk::raii::PhysicalDevice physicalDevice = nullptr;
     vk::raii::SurfaceKHR surface = nullptr;
     vk::raii::Device logicalDevice = nullptr;
+
     vk::raii::Queue queue = nullptr;
     uint32_t queueFamilyIndex = UINT32_MAX;
+
     vk::raii::SwapchainKHR swapChain = nullptr;
     vk::Extent2D swapChainExtent {};
     vk::SurfaceFormatKHR swapChainSurfaceFormat {};
     std::vector<vk::Image> swapChainImages {};
     std::vector<vk::raii::ImageView> swapChainImageViews {};
+
+    vk::raii::DescriptorSetLayout descriptorSetLayout = nullptr;
+
     vk::raii::PipelineLayout pipelineLayout = nullptr;
     vk::raii::Pipeline graphicsPipeline = nullptr;
+
     vk::raii::Buffer vertexBuffer = nullptr;
     vk::raii::DeviceMemory vertexBufferMemory = nullptr;
+    vk::raii::Buffer indexBuffer = nullptr;
+    vk::raii::DeviceMemory indexBufferMemory = nullptr;
+    std::vector<vk::raii::Buffer> uniformBuffers;
+    std::vector<vk::raii::DeviceMemory> uniformBuffersMemory;
+    std::vector<void*> uniformBuffersMapped;
+
     vk::raii::CommandPool commandPool = nullptr;
     std::vector<vk::raii::CommandBuffer> commandBuffers {};
 
@@ -98,9 +122,12 @@ private:
         createLogicalDevice();
         createSwapChain();
         createImageViews();
+        createDescriptorSetLayout();
         createGraphicsPipeline();
         createCommandPool();
         createVertexBuffer();
+        createIndexBuffer();
+        createUniformBuffers();
         createCommandBuffers();
         createSyncObjects();
     }
@@ -115,6 +142,15 @@ private:
         logicalDevice.waitIdle();
     }
 
+    void updateUniformBuffer(uint32_t currentImage) 
+    {
+        static auto startTime = std::chrono::high_resolution_clock::now();
+
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+        UniformBufferObject ubo{};
+        ubo.model = rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    }
 
     void drawFrame()
     {
@@ -133,6 +169,8 @@ private:
             return;
         }
         logicalDevice.resetFences(*inFlightFences[frameIndex]);
+
+        updateUniformBuffer(frameIndex);
 
         commandBuffers[frameIndex].reset();
         recordCommandBuffer(imageIndex);
@@ -435,6 +473,22 @@ private:
         }
     }
 
+    void createDescriptorSetLayout() 
+    {
+        vk::DescriptorSetLayoutBinding uboLayoutBinding(
+            0,
+            vk::DescriptorType::eUniformBuffer,
+            1,
+            vk::ShaderStageFlagBits::eVertex,
+            nullptr
+        );
+
+        vk::DescriptorSetLayoutCreateInfo layoutInfo{.bindingCount = 1, .pBindings = &uboLayoutBinding};
+
+        descriptorSetLayout = vk::raii::DescriptorSetLayout(logicalDevice, layoutInfo);
+
+    }
+
 
     void createGraphicsPipeline()
     {
@@ -515,7 +569,8 @@ private:
         };
 
         vk::PipelineLayoutCreateInfo pipelineLayoutInfo {
-            .setLayoutCount = 0,
+            .setLayoutCount = 1,
+            .pSetLayouts = &*descriptorSetLayout,
             .pushConstantRangeCount = 0
         };
 
@@ -596,7 +651,11 @@ private:
     {
         vk::DeviceSize bufferSize = sizeof(Vertex) * vertices.size();
 
-        vk::BufferCreateInfo stagingInfo{ .size = bufferSize, .usage = vk::BufferUsageFlagBits::eTransferSrc, .sharingMode = vk::SharingMode::eExclusive };
+        vk::BufferCreateInfo stagingInfo { 
+            .size = bufferSize,
+            .usage = vk::BufferUsageFlagBits::eTransferSrc,
+            .sharingMode = vk::SharingMode::eExclusive 
+        };
         vk::raii::Buffer stagingBuffer(logicalDevice, stagingInfo);
         vk::raii::DeviceMemory stagingBufferMemory = nullptr;
 
@@ -608,6 +667,7 @@ private:
             stagingBufferMemory
         );
 
+        //can just directly copy the data from the cpu into the staging buffer because its host visible - get handle with mapMemory
         void* dataStaging = stagingBufferMemory.mapMemory(0, stagingInfo.size);
         memcpy(dataStaging, vertices.data(), stagingInfo.size);
         stagingBufferMemory.unmapMemory();
@@ -621,6 +681,57 @@ private:
         );
 
         copyBuffer(stagingBuffer, vertexBuffer, stagingInfo.size);
+    }
+
+    void createIndexBuffer() {
+        vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+        vk::raii::Buffer stagingBuffer({});
+        vk::raii::DeviceMemory stagingBufferMemory({});
+        createBuffer(
+            bufferSize,
+            vk::BufferUsageFlagBits::eTransferSrc,
+            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+            stagingBuffer,
+            stagingBufferMemory
+        );
+
+        void* data = stagingBufferMemory.mapMemory(0, bufferSize);
+        memcpy(data, indices.data(), (size_t) bufferSize);
+        stagingBufferMemory.unmapMemory();
+
+        createBuffer(
+            bufferSize,
+            vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer,
+            vk::MemoryPropertyFlagBits::eDeviceLocal,
+            indexBuffer,
+            indexBufferMemory
+        );
+
+        copyBuffer(stagingBuffer, indexBuffer, bufferSize);
+    }
+
+    void createUniformBuffers() 
+    {
+        uniformBuffers.clear();
+        uniformBuffersMemory.clear();
+        uniformBuffersMapped.clear();
+
+        for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            vk::DeviceSize bufferSize = sizeof(UniformBufferObject);
+            vk::raii::Buffer buffer({});
+            vk::raii::DeviceMemory bufferMem({});
+            createBuffer(
+                bufferSize,
+                vk::BufferUsageFlagBits::eUniformBuffer,
+                vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+                buffer,
+                bufferMem
+            );
+            uniformBuffers.emplace_back(std::move(buffer));
+            uniformBuffersMemory.emplace_back(std::move(bufferMem));
+            uniformBuffersMapped.emplace_back( uniformBuffersMemory[i].mapMemory(0, bufferSize));
+        }
     }
 
     void createCommandPool()
@@ -726,6 +837,7 @@ private:
         cmd.bindPipeline(vk::PipelineBindPoint::eGraphics, *graphicsPipeline);
 
         cmd.bindVertexBuffers(0, *vertexBuffer, {0});
+        cmd.bindIndexBuffer(*indexBuffer, 0, vk::IndexType::eUint16);
 
         cmd.setViewport(
             0,
@@ -740,7 +852,8 @@ private:
         );
         cmd.setScissor(0, vk::Rect2D(vk::Offset2D(0, 0), swapChainExtent));
 
-        cmd.draw(3, 1, 0, 0);
+
+        cmd.drawIndexed(indices.size(), 1, 0, 0, 0);
 
         cmd.endRendering();
 
