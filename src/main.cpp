@@ -18,6 +18,7 @@
 #include "lib/utils.h"
 #include "myVulkanHelpers.h"
 
+
 struct Vertex
 {
     glm::vec2 pos;
@@ -98,8 +99,8 @@ private:
         createSwapChain();
         createImageViews();
         createGraphicsPipeline();
-        createVertexBuffer();
         createCommandPool();
+        createVertexBuffer();
         createCommandBuffers();
         createSyncObjects();
     }
@@ -571,7 +572,7 @@ private:
     }
 
 
-    void copyBuffer(vk::raii::Buffer& srcBuffer, vk::raii::Buffer& dtsBuffer, vk::DeviceSize size) 
+    void copyBuffer(vk::raii::Buffer& srcBuffer, vk::raii::Buffer& dstBuffer, vk::DeviceSize size) 
     {
         vk::CommandBufferAllocateInfo allocInfo { 
             .commandPool = commandPool,
@@ -579,6 +580,15 @@ private:
             .commandBufferCount = 1 
         };
         vk::raii::CommandBuffer commandCopyBuffer = std::move(logicalDevice.allocateCommandBuffers(allocInfo).front()); 
+
+        commandCopyBuffer.begin(vk::CommandBufferBeginInfo { .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit });
+
+        commandCopyBuffer.copyBuffer(srcBuffer, dstBuffer, vk::BufferCopy(0, 0, size));
+
+        commandCopyBuffer.end();
+
+        queue.submit(vk::SubmitInfo{ .commandBufferCount = 1, .pCommandBuffers = &*commandCopyBuffer }, nullptr);
+        queue.waitIdle();
     }
 
 
@@ -611,12 +621,6 @@ private:
         );
 
         copyBuffer(stagingBuffer, vertexBuffer, stagingInfo.size);
-
-        
-
-        void* data = vertexBufferMemory.mapMemory(0, bufferSize);
-        memcpy(data, vertices.data(), bufferSize);
-        vertexBufferMemory.unmapMemory();
     }
 
     void createCommandPool()
