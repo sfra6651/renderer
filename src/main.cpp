@@ -571,9 +571,14 @@ private:
     }
 
 
-    void copyBuffer(vk::raii::Buffer& stagingBuffer, vk::raii::Buffer& vertexBuffer, uint32_t stagingInfoSize) 
+    void copyBuffer(vk::raii::Buffer& srcBuffer, vk::raii::Buffer& dtsBuffer, vk::DeviceSize size) 
     {
-        
+        vk::CommandBufferAllocateInfo allocInfo { 
+            .commandPool = commandPool,
+            .level = vk::CommandBufferLevel::ePrimary,
+            .commandBufferCount = 1 
+        };
+        vk::raii::CommandBuffer commandCopyBuffer = std::move(logicalDevice.allocateCommandBuffers(allocInfo).front()); 
     }
 
 
@@ -599,15 +604,15 @@ private:
 
         createBuffer(
             bufferSize,
-            vk::BufferUsageFlagBits::eVertexBuffer,
-            vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+            vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst,
+            vk::MemoryPropertyFlagBits::eDeviceLocal,
             vertexBuffer,
             vertexBufferMemory
         );
 
         copyBuffer(stagingBuffer, vertexBuffer, stagingInfo.size);
 
-        vertexBufferMemory.unmapMemory();
+        
 
         void* data = vertexBufferMemory.mapMemory(0, bufferSize);
         memcpy(data, vertices.data(), bufferSize);
