@@ -23,11 +23,17 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/g-truc/glm.git
     GIT_TAG 1.0.1
 )
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG master
+)
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(glfw glm)
 FetchContent_Populate(VulkanHeaders)
+FetchContent_Populate(stb)
 
 add_executable(renderer
     src/main.cpp
@@ -35,7 +41,7 @@ add_executable(renderer
 )
 
 target_include_directories(renderer BEFORE PRIVATE ${vulkanheaders_SOURCE_DIR}/include)
-target_include_directories(renderer PRIVATE src)
+target_include_directories(renderer PRIVATE src ${stb_SOURCE_DIR})
 target_compile_definitions(renderer PRIVATE
     VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
 )

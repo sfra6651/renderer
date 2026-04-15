@@ -1,10 +1,13 @@
 #include "vulkan/vulkan.hpp"
+#include "vulkan/vulkan_enums.hpp"
 #include <array>
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <cstdint>
 #include <cstring>
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
 #include <limits>
 #include <map>
 #include <optional>
@@ -12,6 +15,8 @@
 #include <vulkan/vulkan_raii.hpp>
 #define GLFW_INCLUDE_VULKAN
 #include<GLFW/glfw3.h> //pulls in vulkan because of GLFW_INCLUDE_VULKAN flag
+#define GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+#define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <vector>
@@ -93,6 +98,9 @@ private:
   vk::raii::PipelineLayout pipelineLayout = nullptr;
   vk::raii::Pipeline graphicsPipeline = nullptr;
 
+  vk::raii::Image textureImage = nullptr;
+  vk::raii::DeviceMemory textureImageMemory = nullptr;
+
   vk::raii::Buffer vertexBuffer = nullptr;
   vk::raii::DeviceMemory vertexBufferMemory = nullptr;
   vk::raii::Buffer indexBuffer = nullptr;
@@ -105,6 +113,7 @@ private:
 
   vk::raii::CommandPool commandPool = nullptr;
   std::vector<vk::raii::CommandBuffer> commandBuffers {};
+
 
   //semaphores
   std::vector<vk::raii::Semaphore> presentCompleteSemaphores {};
@@ -127,6 +136,7 @@ private:
     createDescriptorSetLayout();
     createGraphicsPipeline();
     createCommandPool();
+    createTextureImage();
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
@@ -661,6 +671,80 @@ private:
 
     queue.submit(vk::SubmitInfo{ .commandBufferCount = 1, .pCommandBuffers = &*commandCopyBuffer }, nullptr);
     queue.waitIdle();
+  }
+
+  void createImage(
+    uint32_t width,
+    uint32_t height,
+    vk::Format format,
+    vk::ImageTiling tiling,
+    vk::ImageUsageFlags usage,
+    vk::MemoryPropertyFlags properties,
+    vk::raii::Image& image,
+    vk::raii::DeviceMemory& imageMemory
+  ) {
+    vk::ImageCreateInfo imageInfo { 
+      .imageType = vk::ImageType::e2D,
+      .format = format,
+      .extent = {width, height, 1},
+      .mipLevels = 1, .arrayLayers = 1,
+      .samples = vk::SampleCountFlagBits::e1,
+      .tiling = tiling,
+      .usage = usage,
+      .sharingMode = vk::SharingMode::eExclusive 
+    };
+
+    image = vk::raii::Image(logicalDevice, imageInfo);
+
+    vk::MemoryRequirements memRequirements = image.getMemoryRequirements();
+    vk::MemoryAllocateInfo allocInfo{ .allocationSize = memRequirements.size,
+                                        .memoryTypeIndex = findMemoryType(physicalDevice, memRequirements.memoryTypeBits, properties) };
+    imageMemory = vk::raii::DeviceMemory(logicalDevice, allocInfo);
+    image.bindMemory(imageMemory, 0);
+}
+
+
+  void createTextureImage() 
+  {
+    int texWidth, texHeight, texChannels;
+    const char* filePath = "textures/space_marine_top_down.png";
+    stbi_uc* pixels = stbi_load(filePath , &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    vk::DeviceSize imageSize = texWidth * texHeight * 4;
+
+    if (!pixels) {
+      logErr("Failed to load image: ");
+      log("CWD: ",std::filesystem::current_path());
+    }
+
+    vk::raii::Buffer stagingBuffer({});
+    vk::raii::DeviceMemory stagingBufferMemory({});
+
+    createBuffer(
+      imageSize,
+      vk::BufferUsageFlagBits::eTransferSrc,
+      vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
+      stagingBuffer,
+      stagingBufferMemory
+    );
+
+    void* data = stagingBufferMemory.mapMemory(0, imageSize);
+    memcpy(data, pixels, imageSize);
+    stagingBufferMemory.unmapMemory();
+
+    stbi_image_free(pixels);
+
+    vk::raii::Image textureImageTemp({});
+    vk::raii::DeviceMemory textureImageMemoryTemp({});
+    createImage(
+      texWidth,
+      texHeight,
+      vk::Format::eR8G8B8A8Srgb,
+      vk::ImageTiling::eOptimal,
+      vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+      vk::MemoryPropertyFlagBits::eDeviceLocal,
+      textureImageTemp,
+      textureImageMemoryTemp
+    );
   }
 
 
