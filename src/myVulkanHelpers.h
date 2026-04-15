@@ -1,5 +1,6 @@
 #pragma once
 
+#include "vulkan/vulkan_structs.hpp"
 #define GLFW_INCLUDE_VULKAN
 #include<GLFW/glfw3.h>
 #include <vulkan/vulkan_raii.hpp>
@@ -89,16 +90,18 @@ inline bool isDeviceSuitable(const vk::raii::PhysicalDevice& device, const vk::r
     }
   }
 
+
   auto features = device.getFeatures2<
    vk::PhysicalDeviceFeatures2,
    vk::PhysicalDeviceShaderDrawParametersFeatures, // vk:PhysicalDeviceFeatures11 doesnt behave here for some reason, this is the specific feature we want from there
    vk::PhysicalDeviceVulkan13Features,
    vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>();
   bool supportsRequiredFeatures =
-     features.get<vk::PhysicalDeviceShaderDrawParametersFeatures>().shaderDrawParameters &&
-     features.get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering &&
-     features.get<vk::PhysicalDeviceVulkan13Features>().synchronization2 &&
-     features.get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState;
+    features.get<vk::PhysicalDeviceFeatures2>().features.samplerAnisotropy &&
+    features.get<vk::PhysicalDeviceShaderDrawParametersFeatures>().shaderDrawParameters &&
+    features.get<vk::PhysicalDeviceVulkan13Features>().dynamicRendering &&
+    features.get<vk::PhysicalDeviceVulkan13Features>().synchronization2 &&
+    features.get<vk::PhysicalDeviceExtendedDynamicStateFeaturesEXT>().extendedDynamicState;
 
   bool swapChainAdequate = false;
   if(extensionSupported) {
