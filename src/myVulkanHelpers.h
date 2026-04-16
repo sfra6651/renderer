@@ -1,6 +1,5 @@
 #pragma once
 
-#include "vulkan/vulkan_structs.hpp"
 #define GLFW_INCLUDE_VULKAN
 #include<GLFW/glfw3.h>
 #include <vulkan/vulkan_raii.hpp>
@@ -140,7 +139,7 @@ inline uint64_t rateDevice(const vk::raii::PhysicalDevice& device, const vk::rai
 }
 
 
-VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats) {
+inline VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKHR>& availableFormats) {
   for (const auto& format : availableFormats) {
     if (format.format == vk::Format::eB8G8R8A8Srgb && format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear) {
       return format;
@@ -152,7 +151,8 @@ VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<vk::SurfaceFormatKH
   return availableFormats[0];
 }
 
-vk::PresentModeKHR chooseSwapPresentMode(const std::vector<vk::PresentModeKHR>& availablePresentModes) {
+
+inline vk::PresentModeKHR chooseSwapPresentMode(const std::vector<vk::PresentModeKHR>& availablePresentModes) {
   for (const auto& mode : availablePresentModes) {
     if (mode == vk::PresentModeKHR::eMailbox) {
       return mode;
@@ -161,7 +161,8 @@ vk::PresentModeKHR chooseSwapPresentMode(const std::vector<vk::PresentModeKHR>& 
   return vk::PresentModeKHR::eFifo;
 }
 
-vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities, GLFWwindow* window) {
+
+inline vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities, GLFWwindow* window) {
   if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
     return capabilities.currentExtent;
   }
@@ -180,7 +181,8 @@ vk::Extent2D chooseSwapExtent(const vk::SurfaceCapabilitiesKHR& capabilities, GL
   return actualExtent;
 }
 
-uint32_t chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const &surfaceCapabilities)
+
+inline uint32_t chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const &surfaceCapabilities)
 {
   auto minImageCount = std::max(3u, surfaceCapabilities.minImageCount);
   if (0 < surfaceCapabilities.maxImageCount && surfaceCapabilities.maxImageCount < minImageCount)
@@ -189,6 +191,7 @@ uint32_t chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const &surfaceCapabi
   }
   return minImageCount;
 }
+
 
 [[nodiscard]] inline vk::raii::ShaderModule createShaderModule(const vk::raii::Device& logicalDevice, const std::vector<char>& code) {
   vk::ShaderModuleCreateInfo createInfo {
@@ -199,7 +202,7 @@ uint32_t chooseSwapMinImageCount(vk::SurfaceCapabilitiesKHR const &surfaceCapabi
 }
 
 
-uint32_t findMemoryType(const vk::raii::PhysicalDevice& physicalDevice, uint32_t typeFilter, vk::MemoryPropertyFlags properties)
+inline uint32_t findMemoryType(const vk::raii::PhysicalDevice& physicalDevice, uint32_t typeFilter, vk::MemoryPropertyFlags properties)
 {
   vk::PhysicalDeviceMemoryProperties memProperties = physicalDevice.getMemoryProperties();
   for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
@@ -212,3 +215,38 @@ uint32_t findMemoryType(const vk::raii::PhysicalDevice& physicalDevice, uint32_t
   throw std::runtime_error("Failed to find suitable memory type!");
 }
 
+
+inline bool hasStencilComponent(vk::Format format) 
+{
+  return format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD24UnormS8Uint;
+}
+
+
+inline vk::Format findSupportedFormat(
+  const vk::raii::PhysicalDevice& physicalDevice,
+  const std::vector<vk::Format>& candidates,
+  vk::ImageTiling tiling, vk::FormatFeatureFlags features
+) {
+  for (const auto format : candidates) {
+    vk::FormatProperties props = physicalDevice.getFormatProperties(format);
+
+    if (tiling == vk::ImageTiling::eLinear && (props.linearTilingFeatures & features) == features) {
+      return format;
+    }
+    if (tiling == vk::ImageTiling::eOptimal && (props.optimalTilingFeatures & features) == features) {
+      return format;
+    }
+  }
+    throw std::runtime_error("failed to find supported format!");
+}
+
+
+inline vk::Format findDepthFormat(const vk::raii::PhysicalDevice& physicalDevice) {
+  return findSupportedFormat
+  (
+    physicalDevice,
+    {vk::Format::eD32Sfloat, vk::Format::eD32SfloatS8Uint, vk::Format::eD24UnormS8Uint},
+    vk::ImageTiling::eOptimal,
+    vk::FormatFeatureFlagBits::eDepthStencilAttachment
+  );
+}
