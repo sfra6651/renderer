@@ -114,6 +114,7 @@ private:
   vk::raii::PipelineLayout pipelineLayout = nullptr;
   vk::raii::Pipeline graphicsPipeline = nullptr;
 
+  uint32_t mipLevels;
   vk::raii::Image textureImage = nullptr;
   vk::raii::DeviceMemory textureImageMemory = nullptr;
   vk::raii::ImageView textureImageView = nullptr;
@@ -818,6 +819,7 @@ private:
   void createImage(
     uint32_t width,
     uint32_t height,
+    uint32_t mipLevels,
     vk::Format format,
     vk::ImageTiling tiling,
     vk::ImageUsageFlags usage,
@@ -829,7 +831,8 @@ private:
       .imageType = vk::ImageType::e2D,
       .format = format,
       .extent = {width, height, 1},
-      .mipLevels = 1, .arrayLayers = 1,
+      .mipLevels = mipLevels,
+      .arrayLayers = 1,
       .samples = vk::SampleCountFlagBits::e1,
       .tiling = tiling,
       .usage = usage,
@@ -852,6 +855,7 @@ private:
     createImage(
       swapChainExtent.width,
       swapChainExtent.height,
+      1,
       depthFormat,
       vk::ImageTiling::eOptimal,
       vk::ImageUsageFlagBits::eDepthStencilAttachment,
@@ -866,9 +870,10 @@ private:
   void createTextureImage() 
   {
     int texWidth, texHeight, texChannels;
-    std::string filePath = TEXTURE_PATH;
-    stbi_uc* pixels = stbi_load(filePath.c_str() , &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    stbi_uc* pixels = stbi_load(TEXTURE_PATH.c_str() , &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     vk::DeviceSize imageSize = texWidth * texHeight * 4;
+
+    mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(texWidth, texHeight)))) + 1;
 
     if (!pixels) {
       logErr("Failed to load image: ");
@@ -895,6 +900,7 @@ private:
     createImage(
       texWidth,
       texHeight,
+      mipLevels,
       vk::Format::eR8G8B8A8Srgb,
       vk::ImageTiling::eOptimal,
       vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
