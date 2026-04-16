@@ -28,10 +28,15 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/nothings/stb.git
     GIT_TAG master
 )
+FetchContent_Declare(
+    tinyobjloader
+    GIT_REPOSITORY https://github.com/tinyobjloader/tinyobjloader.git
+    GIT_TAG v2.0.0rc13
+)
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(glfw glm)
+FetchContent_MakeAvailable(glfw glm tinyobjloader)
 FetchContent_Populate(VulkanHeaders)
 FetchContent_Populate(stb)
 
@@ -45,7 +50,7 @@ target_include_directories(renderer PRIVATE src ${stb_SOURCE_DIR})
 target_compile_definitions(renderer PRIVATE
     VULKAN_HPP_NO_STRUCT_CONSTRUCTORS
 )
-target_link_libraries(renderer PRIVATE Vulkan::Vulkan glfw glm::glm)
+target_link_libraries(renderer PRIVATE Vulkan::Vulkan glfw glm::glm tinyobjloader)
 
 # Slang shader compilation
 find_program(SLANGC_EXECUTABLE slangc REQUIRED)
