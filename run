@@ -1,11 +1,26 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
+
+cd "$(dirname "$0")"
 
 BUILD_TYPE="Debug"
-if [[ "$1" == "-r" ]]; then
-    BUILD_TYPE="Release"
+if [[ "${1:-}" == "-r" ]]; then
+  BUILD_TYPE="Release"
+  shift
 fi
 
-cmake -B build -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -Wno-dev
-cmake --build build --parallel
-./build/renderer
+if ! command -v cmake >/dev/null 2>&1; then
+  echo "error: cmake not installed" >&2
+  exit 1
+fi
+
+if [[ -z "${VULKAN_SDK:-}" ]] && ! command -v glslangValidator >/dev/null 2>&1; then
+  echo "error: Vulkan SDK not found. Install from https://vulkan.lunarg.com/ and source setup-env.sh (linux) or the macOS installer's env script." >&2
+  exit 1
+fi
+
+BUILD_DIR="build/${BUILD_TYPE}"
+cmake -S . -B "${BUILD_DIR}" -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" -Wno-dev
+cmake --build "${BUILD_DIR}" --parallel
+
+exec ./bin/renderer "$@"

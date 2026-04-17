@@ -1,1 +1,15 @@
+# build + output
 build/
+bin/*
+!bin/.gitkeep
+
+# fetched dependency sources (CPM cache)
+third_party/*
+!third_party/.gitkeep
+
+# IDE / tool caches
+.cache/
+.idea/
+cmake-build-*/
+.DS_Store
+compile_commands.json
