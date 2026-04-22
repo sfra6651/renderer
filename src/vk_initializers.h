@@ -13,7 +13,8 @@ VkFenceCreateInfo fence_create_info(VkFenceCreateFlags flags = 0);
 VkSemaphoreCreateInfo semaphore_create_info(VkSemaphoreCreateFlags flags = 0);
 
 VkCommandBufferBeginInfo command_buffer_begin_info(VkCommandBufferUsageFlags flags = 0);
-VkSubmitInfo2 submit_info(VkCommandBufferSubmitInfo* cmd, VkSemaphoreSubmitInfo* signal_sem,
+VkSubmitInfo2 submit_info(VkCommandBufferSubmitInfo* cmd,
+                          VkSemaphoreSubmitInfo* signal_sem,
                           VkSemaphoreSubmitInfo* wait_sem);
 VkCommandBufferSubmitInfo command_buffer_submit_info(VkCommandBuffer cmd);
 VkSemaphoreSubmitInfo semaphore_submit_info(VkPipelineStageFlags2 stage_mask, VkSemaphore semaphore);

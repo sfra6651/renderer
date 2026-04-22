@@ -1,0 +1,6 @@
+CompileFlags:
+  # Vulkan headers live in /usr/local/include on macOS (LunarG installer).
+  # CMake treats /usr/local/include as implicit and strips it from -I flags,
+  # so the actual compile finds <vulkan/vulkan.h> but clangd doesn't.
+  Add:
+    - -I/usr/local/include

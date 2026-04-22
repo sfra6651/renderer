@@ -1,11 +1,10 @@
 # build + output
 build/
-bin/*
-!bin/.gitkeep
+bin/
 
 # fetched dependency sources (CPM cache)
-third_party/*
-!third_party/.gitkeep
+third_party/
+third-party/
 
 # IDE / tool caches
 .cache/

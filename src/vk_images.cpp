@@ -3,29 +3,38 @@
 
 namespace vkutil {
 
-void transition_image(VkCommandBuffer cmd, VkImage image, VkImageLayout current_layout,
-                      VkImageLayout new_layout) {
-  VkImageMemoryBarrier2 barrier{};
-  barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-  barrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-  barrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
-  barrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
-  barrier.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT;
-  barrier.oldLayout = current_layout;
-  barrier.newLayout = new_layout;
-  barrier.image = image;
+void transition_image(
+  VkCommandBuffer cmd,
+  VkImage image,
+  VkImageLayout currentLayout,
+  VkImageLayout newLayout
+) {
+  VkImageMemoryBarrier2 imageBarrier {.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
+  imageBarrier.pNext = nullptr;
 
-  VkImageAspectFlags aspect = (new_layout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL)
-                                  ? VK_IMAGE_ASPECT_DEPTH_BIT
-                                  : VK_IMAGE_ASPECT_COLOR_BIT;
-  barrier.subresourceRange = vkinit::image_subresource_range(aspect);
+  imageBarrier.srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+  imageBarrier.srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT;
+  imageBarrier.dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT;
+  imageBarrier.dstAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT | VK_ACCESS_2_MEMORY_READ_BIT;
 
-  VkDependencyInfo dep{};
-  dep.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
-  dep.imageMemoryBarrierCount = 1;
-  dep.pImageMemoryBarriers = &barrier;
+  imageBarrier.oldLayout = currentLayout;
+  imageBarrier.newLayout = newLayout;
 
-  vkCmdPipelineBarrier2(cmd, &dep);
+  VkImageAspectFlags aspectMask = (newLayout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT;
+  imageBarrier.subresourceRange = vkinit::image_subresource_range(aspectMask);
+  imageBarrier.image = image;
+
+  VkDependencyInfo depInfo {};
+  depInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+  depInfo.pNext = nullptr;
+
+  depInfo.imageMemoryBarrierCount = 1;
+  depInfo.pImageMemoryBarriers = &imageBarrier;
+
+  vkCmdPipelineBarrier2(cmd, &depInfo);
+
+
+
 }
 
 void copy_image_to_image(VkCommandBuffer cmd, VkImage source, VkImage destination,

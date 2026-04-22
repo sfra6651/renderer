@@ -4,6 +4,16 @@
 
 struct SDL_Window;
 
+struct FrameData {
+  VkCommandPool commandPool;
+  VkCommandBuffer mainCommandBuffer;
+
+  VkSemaphore swapchainSemaphore, renderSemaphore;
+  VkFence renderFence;
+};
+
+constexpr uint32_t FRAME_OVERLAP = 2;
+
 class VulkanEngine {
  public:
   void init();
@@ -11,16 +21,37 @@ class VulkanEngine {
   void cleanup();
 
  private:
-  void init_vulkan();
+  void init_vulkan(); //instance, window and devices
+  void init_swapchain();
+  void init_commands();
+  void init_sync_structures();
+  void draw();
 
-  bool is_initialized_ = false;
-  uint32_t frame_number_ = 0;
-  VkExtent2D window_extent_{1280, 720};
-  SDL_Window* window_ = nullptr;
+  void create_swapchain(uint32_t, uint32_t);
+  void destroy_swapchain();
 
-  VkInstance instance_ = VK_NULL_HANDLE;
-  VkDebugUtilsMessengerEXT debug_messenger_ = VK_NULL_HANDLE;
-  VkPhysicalDevice chosen_gpu_ = VK_NULL_HANDLE;
-  VkDevice device_ = VK_NULL_HANDLE;
-  VkSurfaceKHR surface_ = VK_NULL_HANDLE;
+
+  FrameData& get_current_frame() { return frames[frameNumber % FRAME_OVERLAP]; };
+
+  bool isInitialized = false;
+  uint32_t frameNumber = 0;
+  FrameData frames[FRAME_OVERLAP];
+  VkExtent2D windowExtent {1280, 720};
+  SDL_Window* window = nullptr;
+
+  VkInstance instance;
+  VkDebugUtilsMessengerEXT debugMessenger;
+  VkPhysicalDevice chosenGpu;
+  VkDevice device;
+  VkSurfaceKHR surface;
+
+  VkSwapchainKHR swapchain;
+  VkFormat swapchainImageFormat;
+
+  std::vector<VkImage> swapchainImages;
+  std::vector<VkImageView> swapchainImageViews;
+  VkExtent2D swapchainExtent;
+
+  VkQueue graphicsQueue;
+  uint32_t graphicsQueueFamily;
 };
