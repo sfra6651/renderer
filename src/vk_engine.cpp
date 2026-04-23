@@ -260,11 +260,21 @@ void VulkanEngine::draw() {
 void VulkanEngine::run() {
   SDL_Event e;
   bool quit = false;
+
+  Uint64 start = SDL_GetTicks();
+  int frameCounter = 0;
   while (!quit) {
     while (SDL_PollEvent(&e)) {
       if (e.type == SDL_EVENT_QUIT) quit = true;
       if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE) quit = true;
-      draw();
+    }
+    draw();
+    ++frameCounter;
+    Uint64 now = SDL_GetTicks();
+    if ((now - start) >= 1000) {
+      log("frame rate = ", frameCounter); 
+      frameCounter = 0;
+      start = now;
     }
   }
 }
