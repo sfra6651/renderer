@@ -8,7 +8,7 @@ struct FrameData {
   VkCommandPool commandPool;
   VkCommandBuffer mainCommandBuffer;
 
-  VkSemaphore swapchainSemaphore, renderSemaphore;
+  VkSemaphore presentSemaphore;
   VkFence renderFence;
 };
 
@@ -54,4 +54,6 @@ class VulkanEngine {
 
   VkQueue graphicsQueue;
   uint32_t graphicsQueueFamily;
+
+  std::vector<VkSemaphore> renderSemaphores;
 };

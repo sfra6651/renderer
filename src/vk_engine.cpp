@@ -167,9 +167,13 @@ void VulkanEngine::init_sync_structures() {
 	for (int i = 0; i < FRAME_OVERLAP; i++) {
 		VK_CHECK(vkCreateFence(this->device, &fenceCreateInfo, nullptr, &this->frames[i].renderFence));
 
-		VK_CHECK(vkCreateSemaphore(this->device, &semaphoreCreateInfo, nullptr, &this->frames[i].swapchainSemaphore));
-		VK_CHECK(vkCreateSemaphore(this->device, &semaphoreCreateInfo, nullptr, &this->frames[i].renderSemaphore));
+		VK_CHECK(vkCreateSemaphore(this->device, &semaphoreCreateInfo, nullptr, &this->frames[i].presentSemaphore));
 	}
+
+  this->renderSemaphores.resize(swapchainImages.size());
+  for (int i = 0; i < this->swapchainImages.size(); i++) {
+		VK_CHECK(vkCreateSemaphore(this->device, &semaphoreCreateInfo, nullptr, &this->renderSemaphores[i]));
+  }
 };
 
 
@@ -180,7 +184,7 @@ void VulkanEngine::draw() {
 
   //request image from the swapchain
 	uint32_t swapchainImageIndex;
-	VK_CHECK(vkAcquireNextImageKHR(this->device, this->swapchain, 1000000000, get_current_frame().swapchainSemaphore, nullptr, &swapchainImageIndex));
+	VK_CHECK(vkAcquireNextImageKHR(this->device, this->swapchain, 1000000000, get_current_frame().presentSemaphore, nullptr, &swapchainImageIndex));
 
   VkCommandBuffer cmd = get_current_frame().mainCommandBuffer;
 
@@ -221,9 +225,9 @@ void VulkanEngine::draw() {
 	
 	VkSemaphoreSubmitInfo waitInfo = vkinit::semaphore_submit_info(
     VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR,
-    get_current_frame().swapchainSemaphore
+    get_current_frame().presentSemaphore
   );
-	VkSemaphoreSubmitInfo signalInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, get_current_frame().renderSemaphore);	
+	VkSemaphoreSubmitInfo signalInfo = vkinit::semaphore_submit_info(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, this->renderSemaphores[swapchainImageIndex]);	
 	
 	VkSubmitInfo2 submit = vkinit::submit_info(&cmdinfo, &signalInfo, &waitInfo);	
 
@@ -241,7 +245,7 @@ void VulkanEngine::draw() {
 	presentInfo.pSwapchains = &this->swapchain;
 	presentInfo.swapchainCount = 1;
 
-	presentInfo.pWaitSemaphores = &get_current_frame().renderSemaphore;
+	presentInfo.pWaitSemaphores = &this->renderSemaphores[swapchainImageIndex];
 	presentInfo.waitSemaphoreCount = 1;
 
 	presentInfo.pImageIndices = &swapchainImageIndex;
@@ -275,8 +279,10 @@ void VulkanEngine::cleanup() {
 
     //destroy sync objects
 		vkDestroyFence(this->device, this->frames[i].renderFence, nullptr);
-		vkDestroySemaphore(this->device, this->frames[i].renderSemaphore, nullptr);
-		vkDestroySemaphore(this->device ,this->frames[i].swapchainSemaphore, nullptr);
+		vkDestroySemaphore(this->device ,this->frames[i].presentSemaphore, nullptr);
+  }
+  for (int i = 0; i < this->swapchainImages.size(); i++) {
+		vkDestroySemaphore(this->device, this->renderSemaphores[i], nullptr);
   }
   destroy_swapchain();
   vkDestroyDevice(this->device, nullptr);
