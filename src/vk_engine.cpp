@@ -7,6 +7,8 @@
 #include "lib/utils.h"
 #include "vk_initializers.h"
 #include "vk_images.h"
+#define VMA_IMPLEMENTATION
+#include "vk_mem_alloc.h"
 #include "vulkan/vulkan_core.h"
 
 constexpr bool useValidationLayers =
@@ -235,6 +237,8 @@ void VulkanEngine::draw() {
 	// renderFence will now block until the graphic commands finish execution
 	VK_CHECK(vkQueueSubmit2(this->graphicsQueue, 1, &submit, get_current_frame().renderFence));
 
+  get_current_frame().deletionQueue.flush();
+
   //prepare present
 	// this will put the image we just rendered to into the visible window.
 	// we want to wait on the _renderSemaphore for that, 
@@ -294,6 +298,8 @@ void VulkanEngine::cleanup() {
   for (int i = 0; i < this->swapchainImages.size(); i++) {
 		vkDestroySemaphore(this->device, this->renderSemaphores[i], nullptr);
   }
+
+  this->mainDeletionQueue.flush();
   destroy_swapchain();
   vkDestroyDevice(this->device, nullptr);
   vkDestroySurfaceKHR(this->instance, this->surface, nullptr);

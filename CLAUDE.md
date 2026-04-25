@@ -78,7 +78,6 @@ Shaders in `shaders/*.{vert,frag,comp}` are compiled to SPIR-V at build time and
 
 - C++20
 - Header includes use path relative to `src/` (e.g. `#include "vk_engine.h"`, `#include "lib/utils.h"`)
-- Private member variables use trailing underscore (`window_extent_`)
 - New `.cpp` files must be added to `src/CMakeLists.txt`
 - Follow vkguide's `vk_*` file naming (`vk_engine`, `vk_initializers`, `vk_images`, `vk_pipelines`, `vk_descriptors`, `vk_loader`, `vk_types`)
 - Use the user's `log()` / `logErr()` helpers from `lib/utils.h`, not `std::cout` or `{fmt}`

@@ -4,12 +4,32 @@
 
 struct SDL_Window;
 
+struct DeletionQueue
+{
+	std::deque<std::function<void()>> deletors;
+
+	void push_function(std::function<void()>&& function) {
+		deletors.push_back(function);
+	}
+
+	void flush() {
+		// reverse iterate the deletion queue to execute all the functions
+		for (auto it = deletors.rbegin(); it != deletors.rend(); it++) {
+			(*it)(); //call functors
+		}
+
+		deletors.clear();
+	}
+};
+
 struct FrameData {
   VkCommandPool commandPool;
   VkCommandBuffer mainCommandBuffer;
 
   VkSemaphore presentSemaphore;
   VkFence renderFence;
+
+  DeletionQueue deletionQueue;
 };
 
 constexpr uint32_t FRAME_OVERLAP = 2;
@@ -32,6 +52,8 @@ class VulkanEngine {
 
 
   FrameData& get_current_frame() { return frames[frameNumber % FRAME_OVERLAP]; };
+
+  VmaAllocator allocator;
 
   bool isInitialized = false;
   uint32_t frameNumber = 0;
@@ -56,4 +78,6 @@ class VulkanEngine {
   uint32_t graphicsQueueFamily;
 
   std::vector<VkSemaphore> renderSemaphores;
+
+  DeletionQueue mainDeletionQueue;
 };
