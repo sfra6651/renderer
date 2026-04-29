@@ -88,7 +88,7 @@ CPMAddPackage(
 
 # VMA is header-only; one TU in src/ defines the impl.
 add_library(vma INTERFACE)
-target_include_directories(vma INTERFACE ${VulkanMemoryAllocator_SOURCE_DIR}/include)
+target_include_directories(vma SYSTEM INTERFACE ${VulkanMemoryAllocator_SOURCE_DIR}/include)
 target_link_libraries(vma INTERFACE Vulkan::Vulkan)
 
 # --- Source ---------------------------------------------------------------

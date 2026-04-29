@@ -105,6 +105,18 @@ void VulkanEngine::init_vulkan() {
 
   this->graphicsQueue = vkb_device.get_queue(vkb::QueueType::graphics).value();
   this->graphicsQueueFamily = vkb_device.get_queue_index(vkb::QueueType::graphics).value();
+
+  // initialize the memory allocator
+  VmaAllocatorCreateInfo allocatorInfo = {};
+  allocatorInfo.physicalDevice = this->chosenGpu;
+  allocatorInfo.device = this->device;
+  allocatorInfo.instance = this->instance;
+  allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+  vmaCreateAllocator(&allocatorInfo, &this->allocator);
+
+  this->mainDeletionQueue.push_function([&]() {
+      vmaDestroyAllocator(this->allocator);
+  });
 }
 
 
@@ -139,6 +151,43 @@ void VulkanEngine::destroy_swapchain() {
 
 void VulkanEngine::init_swapchain() {
   create_swapchain(this->windowExtent.width, this->windowExtent.height);
+  	//draw image size will match the window
+	VkExtent3D drawImageExtent = {
+		this->windowExtent.width,
+		this->windowExtent.height,
+		1
+	};
+
+	//hardcoding the draw format to 32 bit float
+	this->drawImage.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+	this->drawImage.imageExtent = drawImageExtent;
+
+	VkImageUsageFlags drawImageUsages{};
+	drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+	drawImageUsages |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+	drawImageUsages |= VK_IMAGE_USAGE_STORAGE_BIT;
+	drawImageUsages |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+	VkImageCreateInfo drawImageInfo = vkinit::image_create_info(this->drawImage.imageFormat, drawImageUsages, drawImageExtent);
+
+	//for the draw image, we want to allocate it from gpu local memory
+	VmaAllocationCreateInfo drawImageAllocInfo = {};
+	drawImageAllocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+	drawImageAllocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+	//allocate and create the image
+	vmaCreateImage(this->allocator, &drawImageInfo, &drawImageAllocInfo, &this->drawImage.image, &this->drawImage.allocation, nullptr);
+
+	//build a image-view for the draw image to use for rendering
+	VkImageViewCreateInfo drawImageViewInfo = vkinit::imageview_create_info(this->drawImage.imageFormat, this->drawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
+
+	VK_CHECK(vkCreateImageView(this->device, &drawImageViewInfo, nullptr, &this->drawImage.imageView));
+
+	//add to deletion queues
+	this->mainDeletionQueue.push_function([&]() {
+		vkDestroyImageView(this->device, this->drawImage.imageView, nullptr);
+		vmaDestroyImage(this->allocator, this->drawImage.image, this->drawImage.allocation);
+	});
 };
 
 
@@ -175,6 +224,7 @@ void VulkanEngine::init_sync_structures() {
   this->renderSemaphores.resize(swapchainImages.size());
   for (int i = 0; i < this->swapchainImages.size(); i++) {
 		VK_CHECK(vkCreateSemaphore(this->device, &semaphoreCreateInfo, nullptr, &this->renderSemaphores[i]));
+    this->mainDeletionQueue.push_function([&]() {} );
   }
 };
 
@@ -200,7 +250,7 @@ void VulkanEngine::draw() {
 	//start the command buffer recording
 	VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
 
-    //make the swapchain image into writeable mode before rendering
+  //make the swapchain image into writeable mode before rendering
 	vkutil::transition_image(cmd, this->swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 	//make a clear-color from frame number. This will flash with a 120 frame period.
@@ -280,6 +330,7 @@ void VulkanEngine::run() {
       frameCounter = 0;
       start = now;
     }
+    this->mainDeletionQueue.flush();
   }
 }
 
