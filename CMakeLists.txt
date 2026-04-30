@@ -19,7 +19,10 @@ include(${CMAKE_SOURCE_DIR}/cmake/CPM.cmake)
 include(${CMAKE_SOURCE_DIR}/cmake/CompileShaders.cmake)
 
 # --- Vulkan SDK (system-installed) ----------------------------------------
-find_package(Vulkan REQUIRED COMPONENTS glslangValidator)
+find_package(Vulkan REQUIRED)
+
+# Slang compiler (system-installed; brew install shader-slang/tap/slang on macOS)
+find_program(SLANGC_EXECUTABLE slangc REQUIRED)
 
 # --- Third-party libraries via CPM ----------------------------------------
 CPMAddPackage(
@@ -96,9 +99,7 @@ add_subdirectory(src)
 
 # --- Shaders --------------------------------------------------------------
 file(GLOB SHADER_SOURCES CONFIGURE_DEPENDS
-  ${CMAKE_SOURCE_DIR}/shaders/*.vert
-  ${CMAKE_SOURCE_DIR}/shaders/*.frag
-  ${CMAKE_SOURCE_DIR}/shaders/*.comp
+  ${CMAKE_SOURCE_DIR}/shaders/*.slang
 )
 compile_shaders(renderer "${SHADER_SOURCES}" ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/shaders)
 
