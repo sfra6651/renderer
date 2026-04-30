@@ -17,7 +17,9 @@ class VulkanEngine {
   void init_swapchain();
   void init_commands();
   void init_sync_structures();
+
   void draw();
+  void draw_background(VkCommandBuffer);
 
   void create_swapchain(uint32_t, uint32_t);
   void destroy_swapchain();
