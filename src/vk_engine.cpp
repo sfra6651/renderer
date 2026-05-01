@@ -42,6 +42,8 @@ void VulkanEngine::init() {
 
   init_sync_structures();
 
+  init_descriptors();
+
   this->isInitialized = true;
 }
 
@@ -227,6 +229,45 @@ void VulkanEngine::init_sync_structures() {
     this->mainDeletionQueue.push_function([&]() {} );
   }
 };
+
+void VulkanEngine::init_descriptors() 
+{
+  //create a descriptor pool that will hold 10 sets with 1 image each
+  std::vector<DescriptorAllocator::PoolSizeRatio> sizes = { { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1 } };
+
+  this->globalDescriptorAllocator.init_pool(this->device, 10, sizes);
+
+  //make the descriptor set loyout for the compute draw
+  {
+    DescriptorLayoutBuilder builder;
+    builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+    this->drawImageDescriptorLayout = builder.build(this->device, VK_SHADER_STAGE_COMPUTE_BIT);
+  }
+
+  //allocate a sescriptor set for out draw image
+  this->drawImageDescriptors = this->globalDescriptorAllocator.allocate(this->device, this->drawImageDescriptorLayout);
+
+  VkDescriptorImageInfo imgInfo {};
+  imgInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+  imgInfo.imageView = this->drawImage.imageView;
+
+  VkWriteDescriptorSet drawImageWrite {};
+  drawImageWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+  drawImageWrite.pNext = nullptr;
+  drawImageWrite.dstBinding = 0;
+  drawImageWrite.descriptorCount = 1;
+  drawImageWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+  drawImageWrite .pImageInfo = &imgInfo;
+
+  vkUpdateDescriptorSets(this->device, 1, &drawImageWrite, 0, nullptr);
+
+  //make sure both the descriptor allocator and the new layout get cleaned up properly
+  this->mainDeletionQueue.push_function([&]() {
+    this->globalDescriptorAllocator.destroy_pool(this->device);
+    vkDestroyDescriptorSetLayout(this->device, this->drawImageDescriptorLayout, nullptr);
+  });
+
+}
 
 
 void VulkanEngine::draw() {

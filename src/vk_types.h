@@ -1,5 +1,6 @@
 #pragma once
 
+#include "vulkan/vulkan_core.h"
 #include <vulkan/vulkan.h>
 #include <vk_mem_alloc.h>
 
@@ -11,6 +12,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <span>
 #include <vector>
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -19,6 +21,14 @@
 
 #include "lib/utils.h"
 
+#define VK_CHECK(x)                                                            \
+  do {                                                                         \
+    VkResult err = (x);                                                        \
+    if (err) {                                                                 \
+      logErr("Detected Vulkan error:", static_cast<int>(err));                 \
+      std::abort();                                                            \
+    }                                                                          \
+  } while (0)
 
 struct DeletionQueue
 {
@@ -56,11 +66,3 @@ struct AllocatedImage {
     VkFormat imageFormat;
 };
 
-#define VK_CHECK(x)                                                            \
-  do {                                                                         \
-    VkResult err = (x);                                                        \
-    if (err) {                                                                 \
-      logErr("Detected Vulkan error:", static_cast<int>(err));                 \
-      std::abort();                                                            \
-    }                                                                          \
-  } while (0)

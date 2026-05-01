@@ -1,5 +1,6 @@
 #pragma once
 
+#include "vk_descriptors.h"
 #include "vk_types.h"
 
 struct SDL_Window;
@@ -8,6 +9,10 @@ constexpr uint32_t FRAME_OVERLAP = 2;
 
 class VulkanEngine {
  public:
+  DescriptorAllocator globalDescriptorAllocator;
+  VkDescriptorSet drawImageDescriptors;
+  VkDescriptorSetLayout drawImageDescriptorLayout;
+
   void init();
   void run();
   void cleanup();
@@ -17,6 +22,7 @@ class VulkanEngine {
   void init_swapchain();
   void init_commands();
   void init_sync_structures();
+  void init_descriptors();
 
   void draw();
   void draw_background(VkCommandBuffer);
