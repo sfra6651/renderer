@@ -233,13 +233,13 @@ void VulkanEngine::init_sync_structures() {
 void VulkanEngine::init_descriptors() 
 {
   //create a descriptor pool that will hold 10 sets with 1 image each
-  std::vector<DescriptorAllocator::PoolSizeRatio> sizes = { { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1 } };
+  std::vector<vkutil::DescriptorAllocator::PoolSizeRatio> sizes = { { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1 } };
 
   this->globalDescriptorAllocator.init_pool(this->device, 10, sizes);
 
   //make the descriptor set loyout for the compute draw
   {
-    DescriptorLayoutBuilder builder;
+    vkutil::DescriptorLayoutBuilder builder;
     builder.add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
     this->drawImageDescriptorLayout = builder.build(this->device, VK_SHADER_STAGE_COMPUTE_BIT);
   }
@@ -255,6 +255,7 @@ void VulkanEngine::init_descriptors()
   drawImageWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
   drawImageWrite.pNext = nullptr;
   drawImageWrite.dstBinding = 0;
+  drawImageWrite.dstSet = this->drawImageDescriptors;
   drawImageWrite.descriptorCount = 1;
   drawImageWrite.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
   drawImageWrite .pImageInfo = &imgInfo;

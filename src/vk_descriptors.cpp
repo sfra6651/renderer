@@ -4,7 +4,7 @@
 #include "vulkan/vulkan_core.h"
 
 
-void DescriptorLayoutBuilder::add_binding(uint32_t binding, VkDescriptorType type) 
+void vkutil::DescriptorLayoutBuilder::add_binding(uint32_t binding, VkDescriptorType type) 
 {
   VkDescriptorSetLayoutBinding newbind {};
   newbind.binding = binding;
@@ -14,12 +14,12 @@ void DescriptorLayoutBuilder::add_binding(uint32_t binding, VkDescriptorType typ
   this->bindings.push_back(newbind);
 }
 
-void DescriptorLayoutBuilder::clear()
+void vkutil::DescriptorLayoutBuilder::clear()
 {
   this->bindings.clear();
 }
 
-VkDescriptorSetLayout DescriptorLayoutBuilder::build(
+VkDescriptorSetLayout vkutil::DescriptorLayoutBuilder::build(
   VkDevice device,
   VkShaderStageFlags shaderStages,
   void* pNext,
@@ -42,7 +42,7 @@ VkDescriptorSetLayout DescriptorLayoutBuilder::build(
   return set;
 };
 
-void DescriptorAllocator::init_pool(VkDevice device, uint32_t maxSets, std::span<PoolSizeRatio> poolRatios) 
+void vkutil::DescriptorAllocator::init_pool(VkDevice device, uint32_t maxSets, std::span<PoolSizeRatio> poolRatios) 
 {
   std::vector<VkDescriptorPoolSize> poolSizes;
 
@@ -64,19 +64,20 @@ void DescriptorAllocator::init_pool(VkDevice device, uint32_t maxSets, std::span
 
 }
 
-void DescriptorAllocator::clear_descriptors(VkDevice device)
+void vkutil::DescriptorAllocator::clear_descriptors(VkDevice device)
 {
   vkResetDescriptorPool(device, pool, 0);
 }
 
-void DescriptorAllocator::destroy_pool(VkDevice device)
+void vkutil::DescriptorAllocator::destroy_pool(VkDevice device)
 {
   vkDestroyDescriptorPool(device, pool, nullptr);
 }
 
-VkDescriptorSet DescriptorAllocator::allocate(VkDevice device, VkDescriptorSetLayout layout)
+VkDescriptorSet vkutil::DescriptorAllocator::allocate(VkDevice device, VkDescriptorSetLayout layout)
 {
   VkDescriptorSetAllocateInfo allocInfo {};
+  allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
   allocInfo.pNext = nullptr;
   allocInfo.descriptorPool = pool;
   allocInfo.descriptorSetCount = 1;

@@ -9,7 +9,7 @@ constexpr uint32_t FRAME_OVERLAP = 2;
 
 class VulkanEngine {
  public:
-  DescriptorAllocator globalDescriptorAllocator;
+  vkutil::DescriptorAllocator globalDescriptorAllocator;
   VkDescriptorSet drawImageDescriptors;
   VkDescriptorSetLayout drawImageDescriptorLayout;
 

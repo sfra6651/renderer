@@ -4,6 +4,7 @@ add_executable(renderer
   vk_initializers.cpp
   vk_images.cpp
   vk_descriptors.cpp
+  vk_pipelines.cpp
 )
 
 target_include_directories(renderer PRIVATE
