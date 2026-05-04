@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vk_descriptors.h"
+#include "vk_pipelines.h"
 #include "vk_types.h"
 
 struct SDL_Window;
@@ -12,6 +13,8 @@ class VulkanEngine {
   vkutil::DescriptorAllocator globalDescriptorAllocator;
   VkDescriptorSet drawImageDescriptors;
   VkDescriptorSetLayout drawImageDescriptorLayout;
+  VkPipeline gradientPipeline;
+	VkPipelineLayout gradientPipelineLayout;
 
   void init();
   void run();
@@ -23,6 +26,8 @@ class VulkanEngine {
   void init_commands();
   void init_sync_structures();
   void init_descriptors();
+  void init_pipelines();
+  void init_background_pipelines();
 
   void draw();
   void draw_background(VkCommandBuffer);
