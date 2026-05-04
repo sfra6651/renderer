@@ -209,6 +209,18 @@ void VulkanEngine::init_commands() {
 
 		VK_CHECK(vkAllocateCommandBuffers(this->device, &cmdAllocInfo, &this->frames[i].mainCommandBuffer));
 	}
+
+  // imgui immediate mode commands
+  VK_CHECK(vkCreateCommandPool(this->device, &commandPoolInfo, nullptr, &this->imGuiCommandPool));
+
+	// allocate the command buffer for immediate submits
+	VkCommandBufferAllocateInfo cmdAllocInfo = vkinit::command_buffer_allocate_info(this->imGuiCommandPool, 1);
+
+	VK_CHECK(vkAllocateCommandBuffers(this->device, &cmdAllocInfo, &this->imGuiCommandBuffer));
+
+	this->mainDeletionQueue.push_function([&]() { 
+	vkDestroyCommandPool(this->device, this->imGuiCommandPool, nullptr);
+	});
 };
 
 
@@ -230,6 +242,10 @@ void VulkanEngine::init_sync_structures() {
 		VK_CHECK(vkCreateSemaphore(this->device, &semaphoreCreateInfo, nullptr, &this->renderSemaphores[i]));
     this->mainDeletionQueue.push_function([&]() {} );
   }
+
+  //imgui fence
+  VK_CHECK(vkCreateFence(this->device, &fenceCreateInfo, nullptr, &this->imGuiFence));
+	this->mainDeletionQueue.push_function([&]() { vkDestroyFence(this->device, this->imGuiFence, nullptr); });
 };
 
 void VulkanEngine::init_descriptors() 
@@ -323,6 +339,30 @@ void VulkanEngine::init_background_pipelines()
 		vkDestroyPipelineLayout(this->device, this->gradientPipelineLayout, nullptr);
 		vkDestroyPipeline(this->device, this->gradientPipeline, nullptr);
 		});
+}
+
+void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)> && function)
+{
+  VK_CHECK(vkResetFences(this->device, 1, &this->imGuiFence));
+  VK_CHECK(vkResetCommandBuffer(this->imGuiCommandBuffer, 0));
+
+  VkCommandBuffer cmd = this->imGuiCommandBuffer;
+
+  VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+  VK_CHECK(vkBeginCommandBuffer(cmd, &cmdBeginInfo));
+
+  function(cmd);
+
+  VK_CHECK(vkEndCommandBuffer(cmd));
+
+  VkCommandBufferSubmitInfo cmdInfo = vkinit::command_buffer_submit_info(cmd);
+  VkSubmitInfo2 submit = vkinit::submit_info(&cmdInfo, nullptr, nullptr);
+
+  //submit command buffer to the queue and execute it
+  //this->renderFence will now block until the graphic command finish executing
+  VK_CHECK(vkQueueSubmit2(this->graphicsQueue, 1, &submit, this->imGuiFence));
+  VK_CHECK(vkWaitForFences(this->device, 1, &this->imGuiFence, true, 9999999999));
 }
 
 void VulkanEngine::draw() {

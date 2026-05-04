@@ -16,6 +16,13 @@ class VulkanEngine {
   VkPipeline gradientPipeline;
 	VkPipelineLayout gradientPipelineLayout;
 
+  //immediate submit structures
+  VkFence imGuiFence;
+  VkCommandBuffer imGuiCommandBuffer;
+  VkCommandPool imGuiCommandPool;
+
+  void immediate_submit(std::function<void(VkCommandBuffer cmd)> && function);
+
   void init();
   void run();
   void cleanup();
@@ -28,6 +35,8 @@ class VulkanEngine {
   void init_descriptors();
   void init_pipelines();
   void init_background_pipelines();
+
+  void init_imgui();
 
   void draw();
   void draw_background(VkCommandBuffer);
