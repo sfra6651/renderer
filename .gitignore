@@ -9,6 +9,10 @@ third-party/
 # IDE / tool caches
 .cache/
 .idea/
+.vs/
 cmake-build-*/
 .DS_Store
 compile_commands.json
+
+# imgui auto-saved layout
+imgui.ini
