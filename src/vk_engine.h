@@ -21,6 +21,9 @@ class VulkanEngine {
   VkCommandBuffer imGuiCommandBuffer;
   VkCommandPool imGuiCommandPool;
 
+  std::vector<ComputeEffect> backgroundEffects;
+  int currentBackgroundEffect {0};
+
   void immediate_submit(std::function<void(VkCommandBuffer cmd)> && function);
 
   void init();
@@ -35,6 +38,7 @@ class VulkanEngine {
   void init_descriptors();
   void init_pipelines();
   void init_background_pipelines();
+  void init_push_constant_pipelines();
 
   void init_imgui();
 

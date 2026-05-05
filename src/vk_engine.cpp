@@ -297,7 +297,76 @@ void VulkanEngine::init_descriptors()
 
 void VulkanEngine::init_pipelines()
 {
-  init_background_pipelines();
+
+  init_push_constant_pipelines();
+//  init_background_pipelines();
+}
+
+void VulkanEngine::init_push_constant_pipelines()
+{
+  VkPipelineLayoutCreateInfo computeLayout{};
+  computeLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+  computeLayout.pNext = nullptr;
+  computeLayout.pSetLayouts = &this->drawImageDescriptorLayout;
+  computeLayout.setLayoutCount = 1;
+
+  VkPushConstantRange pushConstant{};
+  pushConstant.offset = 0;
+  pushConstant.size = sizeof(ComputePushConstants) ;
+  pushConstant.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+
+  computeLayout.pPushConstantRanges = &pushConstant;
+  computeLayout.pushConstantRangeCount = 1;
+
+  VK_CHECK(vkCreatePipelineLayout(this->device, &computeLayout, nullptr, &this->gradientPipelineLayout));
+
+  VkShaderModule computeDrawShader;
+  if (!vkutil::load_shader_module("bin/shaders/compute_color.spv", this->device, &computeDrawShader))
+  {
+	  logErr("Error when building the colored mesh shader");
+    std::abort();
+  }
+
+	VkPipelineShaderStageCreateInfo stageinfo{};
+	stageinfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	stageinfo.pNext = nullptr;
+	stageinfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+	stageinfo.module = computeDrawShader;
+	stageinfo.pName = "main";
+
+	VkComputePipelineCreateInfo computePipelineCreateInfo{};
+	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+	computePipelineCreateInfo.pNext = nullptr;
+	computePipelineCreateInfo.layout = this->gradientPipelineLayout;
+	computePipelineCreateInfo.stage = stageinfo;
+
+  ComputeEffect gradient;
+  gradient.layout = this->gradientPipelineLayout;
+  gradient.name = "gradient";
+  gradient.data = {};
+
+  //default colors
+  gradient.data.data1 = glm::vec4(1, 0, 0, 1);
+  gradient.data.data2 = glm::vec4(0, 0, 1, 1);
+
+  VK_CHECK(vkCreateComputePipelines(
+    this->device,
+    VK_NULL_HANDLE,
+    1,
+    &computePipelineCreateInfo,
+    nullptr,
+    &this->gradientPipeline
+  ));
+
+  gradient.pipeline = this->gradientPipeline;
+  this->backgroundEffects.push_back(gradient);
+
+  vkDestroyShaderModule(this->device, computeDrawShader, nullptr);
+
+	this->mainDeletionQueue.push_function([&]() {
+		vkDestroyPipelineLayout(this->device, this->gradientPipelineLayout, nullptr);
+		vkDestroyPipeline(this->device, this->gradientPipeline, nullptr);
+		});
 }
 
 void VulkanEngine::init_background_pipelines()
@@ -531,8 +600,10 @@ void VulkanEngine::draw() {
 
 void VulkanEngine::draw_background(VkCommandBuffer cmd)
 {
+  ComputeEffect& effect = this->backgroundEffects[this->currentBackgroundEffect];
+
   // bind the gradient drawing compute pipeline
-	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, this->gradientPipeline);
+	vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, effect.pipeline);
 
 	// bind the descriptor set containing the draw image for the compute pipeline
 	vkCmdBindDescriptorSets(
@@ -545,6 +616,8 @@ void VulkanEngine::draw_background(VkCommandBuffer cmd)
     0,
     nullptr
   );
+
+  vkCmdPushConstants(cmd, this->gradientPipelineLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ComputePushConstants), &effect.data);
 
 	// execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
 	vkCmdDispatch(cmd, std::ceil(this->drawExtent.width / 16.0), std::ceil(this->drawExtent.height / 16.0), 1);
@@ -596,7 +669,21 @@ void VulkanEngine::run() {
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 
-    ImGui::ShowDemoWindow();
+    if (ImGui::Begin("background")) {
+      ComputeEffect& selected = this->backgroundEffects[this->currentBackgroundEffect];
+
+      ImGui::Text("Selected effect: ", selected.name);
+
+      ImGui::SliderInt("Effect Index", &this->currentBackgroundEffect, 0, this->backgroundEffects.size() - 1);
+      
+      ImGui::InputFloat4("data1",(float*)& selected.data.data1);
+			ImGui::InputFloat4("data2",(float*)& selected.data.data2);
+
+    }
+
+    ImGui::End();
+
+    //ImGui::ShowDemoWindow();
 
     ImGui::Render();
 
