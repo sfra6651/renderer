@@ -40,6 +40,7 @@ class VulkanEngine {
 
   void draw();
   void draw_background(VkCommandBuffer);
+  void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 
   void create_swapchain(uint32_t, uint32_t);
   void destroy_swapchain();
