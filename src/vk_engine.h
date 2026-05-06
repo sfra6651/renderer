@@ -57,7 +57,7 @@ class VulkanEngine {
   bool isInitialized = false;
   uint32_t frameNumber = 0;
   FrameData frames[FRAME_OVERLAP];
-  VkExtent2D windowExtent {1280, 720};
+  VkExtent2D windowExtent {2560, 1440};
   SDL_Window* window = nullptr;
 
   VkInstance instance;
