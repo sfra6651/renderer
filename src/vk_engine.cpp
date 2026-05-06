@@ -3,6 +3,7 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 #include <VkBootstrap.h>
+#include <thread>
 
 #include "lib/utils.h"
 #include "vk_initializers.h"
@@ -475,7 +476,7 @@ void VulkanEngine::init_imgui()
 	ImGui_ImplVulkan_CreateFontsTexture();
 
 	// add the destroy the imgui created structures
-	this->mainDeletionQueue.push_function([=]() {
+	this->mainDeletionQueue.push_function([this, imguiPool]() {
 		ImGui_ImplVulkan_Shutdown();
 		vkDestroyDescriptorPool(this->device, imguiPool, nullptr);
 	});
@@ -672,7 +673,7 @@ void VulkanEngine::run() {
     if (ImGui::Begin("background")) {
       ComputeEffect& selected = this->backgroundEffects[this->currentBackgroundEffect];
 
-      ImGui::Text("Selected effect: ", selected.name);
+      ImGui::Text("Selected effect: %s", selected.name);
 
       ImGui::SliderInt("Effect Index", &this->currentBackgroundEffect, 0, this->backgroundEffects.size() - 1);
       
