@@ -2,6 +2,7 @@
 
 #include "vk_descriptors.h"
 #include "vk_pipelines.h"
+#include "vk_initializers.h"
 #include "vk_types.h"
 
 struct SDL_Window;

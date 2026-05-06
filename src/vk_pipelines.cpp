@@ -67,6 +67,92 @@ VkPipeline PipelineBuilder::build_pipeline(VkDevice device)
   }
 }
 
+
+void PipelineBuilder::set_shaders(VkShaderModule vertexShader, VkShaderModule fragmentShader)
+{
+  this->shaderStages.clear();
+
+  this->shaderStages.push_back(
+    vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_VERTEX_BIT, vertexShader));
+
+  this->shaderStages.push_back(
+    vkinit::pipeline_shader_stage_create_info(VK_SHADER_STAGE_FRAGMENT_BIT, fragmentShader));
+}
+
+
+void PipelineBuilder::set_input_topology(VkPrimitiveTopology topology)
+{
+  this->inputAssembly.topology = topology;
+  // we are not going to use primitive restart on the entire tutorial so leave
+  // it on false
+  this->inputAssembly.primitiveRestartEnable = VK_FALSE;
+}
+
+
+void PipelineBuilder::set_polygon_mode(VkPolygonMode mode)
+{
+  this->rasterizer.polygonMode = mode;
+  this->rasterizer.lineWidth = 1.f;
+}
+
+void PipelineBuilder::set_cull_mode(VkCullModeFlags cullMode, VkFrontFace frontFace)
+{
+  this->rasterizer.cullMode = cullMode;
+  this->rasterizer.frontFace = frontFace;
+}
+
+
+void PipelineBuilder::set_multisampling_none()
+{
+  this->multisampling.sampleShadingEnable = VK_FALSE;
+  // multisampling defaulted to no multisampling (1 sample per pixel)
+  this->multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+  this->multisampling.minSampleShading = 1.0f;
+  this->multisampling.pSampleMask = nullptr;
+  // no alpha to coverage either
+  this->multisampling.alphaToCoverageEnable = VK_FALSE;
+  this->multisampling.alphaToOneEnable = VK_FALSE;
+}
+
+void PipelineBuilder::disable_blending()
+{
+  // default write mask
+  this->colorBlendAttachment.colorWriteMask = 
+    VK_COLOR_COMPONENT_R_BIT | 
+    VK_COLOR_COMPONENT_G_BIT |
+    VK_COLOR_COMPONENT_B_BIT |
+    VK_COLOR_COMPONENT_A_BIT;
+  // no blending
+  this->colorBlendAttachment.blendEnable = VK_FALSE;
+}
+
+void PipelineBuilder::set_color_attachment_format(VkFormat format)
+{
+    this->colorAttachmentFormat = format;
+    // connect the format to the renderInfo  structure
+    this->renderInfo.colorAttachmentCount = 1;
+    this->renderInfo.pColorAttachmentFormats = &this->colorAttachmentFormat;
+}
+
+void PipelineBuilder::set_depth_format(VkFormat format)
+{
+  this->renderInfo.depthAttachmentFormat = format;
+}
+
+
+void PipelineBuilder::disable_depthtest()
+{
+  this->depthStencil.depthTestEnable = VK_FALSE;
+  this->depthStencil.depthWriteEnable = VK_FALSE;
+  this->depthStencil.depthCompareOp = VK_COMPARE_OP_NEVER;
+  this->depthStencil.depthBoundsTestEnable = VK_FALSE;
+  this->depthStencil.stencilTestEnable = VK_FALSE;
+  this->depthStencil.front = {};
+  this->depthStencil.back = {};
+  this->depthStencil.minDepthBounds = 0.f;
+  this->depthStencil.maxDepthBounds = 1.f;
+}
+
 void PipelineBuilder::clear()
 {
   // clear all of the structs we need back to 0 with their correct stype

@@ -163,4 +163,18 @@ VkRenderingInfo rendering_info(
   return renderInfo;
 }
 
+VkPipelineShaderStageCreateInfo pipeline_shader_stage_create_info(
+  VkShaderStageFlagBits stage,
+  VkShaderModule shader_module,
+  const char* entry
+) {
+  VkPipelineShaderStageCreateInfo info{};
+  info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+  info.pNext = nullptr;
+  info.stage = stage;
+  info.module = shader_module;
+  info.pName = entry;
+  return info;
+}
+
 }  // namespace vkinit
