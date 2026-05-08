@@ -124,7 +124,7 @@ VkImageSubresourceRange image_subresource_range(VkImageAspectFlags aspect_mask) 
   return range;
 }
 
-VkRenderingAttachmentInfo attachemnt_info(
+VkRenderingAttachmentInfo attachment_info(
   VkImageView view,
   VkClearValue* clear,
   VkImageLayout layout /*= VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL*/
@@ -174,6 +174,18 @@ VkPipelineShaderStageCreateInfo pipeline_shader_stage_create_info(
   info.stage = stage;
   info.module = shader_module;
   info.pName = entry;
+  return info;
+}
+
+VkPipelineLayoutCreateInfo pipeline_layout_create_info() {
+  VkPipelineLayoutCreateInfo info{};
+  info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+  info.pNext = nullptr;
+  info.flags = 0;
+  info.setLayoutCount = 0;
+  info.pSetLayouts = nullptr;
+  info.pushConstantRangeCount = 0;
+  info.pPushConstantRanges = nullptr;
   return info;
 }
 

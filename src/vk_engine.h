@@ -16,6 +16,8 @@ class VulkanEngine {
   VkDescriptorSetLayout drawImageDescriptorLayout;
   VkPipeline gradientPipeline;
 	VkPipelineLayout gradientPipelineLayout;
+  VkPipelineLayout trianglePipelineLayout;
+  VkPipeline trianglePipeline;
 
   //immediate submit structures
   VkFence imGuiFence;
@@ -40,11 +42,14 @@ class VulkanEngine {
   void init_pipelines();
   void init_background_pipelines();
   void init_push_constant_pipelines();
+  
+  void init_triangle_pipelines();
 
   void init_imgui();
 
   void draw();
   void draw_background(VkCommandBuffer);
+  void draw_geometry(VkCommandBuffer cmd);
   void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 
   void create_swapchain(uint32_t, uint32_t);
