@@ -81,16 +81,20 @@ void VulkanEngine::init_vulkan() {
     std::abort();
   }
 
-  VkPhysicalDeviceVulkan13Features features13{};
+  VkPhysicalDeviceVulkan11Features features11 {};
+  features11.shaderDrawParameters = VK_TRUE;
+
+  VkPhysicalDeviceVulkan13Features features13 {};
   features13.dynamicRendering = VK_TRUE;
   features13.synchronization2 = VK_TRUE;
 
-  VkPhysicalDeviceVulkan12Features features12{};
+  VkPhysicalDeviceVulkan12Features features12 {};
   features12.bufferDeviceAddress = VK_TRUE;
   features12.descriptorIndexing = VK_TRUE;
 
   vkb::PhysicalDeviceSelector selector{vkb_inst};
   auto physicalDeviceR = selector.set_minimum_version(1, 3)
+                      .set_required_features_11(features11)
                       .set_required_features_13(features13)
                       .set_required_features_12(features12)
                       .set_surface(this->surface)
@@ -300,6 +304,7 @@ void VulkanEngine::init_pipelines()
 {
 
   init_push_constant_pipelines();
+  init_triangle_pipelines();
 //  init_background_pipelines();
 }
 
@@ -374,19 +379,19 @@ void VulkanEngine::init_push_constant_pipelines()
 void VulkanEngine::init_triangle_pipelines()
 {
   VkShaderModule triangleFragShader;
-	if (!vkutil::load_shader_module("../../shaders/colored_triangle.frag.spv", this->device, &triangleFragShader)) {
+	if (!vkutil::load_shader_module("bin/shaders/colored_triangle_frag.spv", this->device, &triangleFragShader)) {
 		logErr("Error when building the triangle fragment shader module");
 	}
 	else {
-		logErr("Triangle fragment shader succesfully loaded");
+		log("Triangle fragment shader succesfully loaded");
 	}
 
 	VkShaderModule triangleVertexShader;
-	if (!vkutil::load_shader_module("../../shaders/colored_triangle.vert.spv", this->device, &triangleVertexShader)) {
+	if (!vkutil::load_shader_module("bin/shaders/colored_triangle_vert.spv", this->device, &triangleVertexShader)) {
 		logErr("Error when building the triangle vertex shader module");
 	}
 	else {
-		logErr("Triangle vertex shader succesfully loaded");
+		log("Triangle vertex shader succesfully loaded");
 	}
 	
 	//build the pipeline layout that controls the inputs/outputs of the shader
@@ -598,9 +603,14 @@ void VulkanEngine::draw() {
 
 	draw_background(cmd);
 
+  vkutil::transition_image(cmd, this->drawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+
+  draw_geometry(cmd);
+
 	//transition the draw image and the swapchain image into their correct transfer layouts
 	vkutil::transition_image(cmd, this->drawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
 	vkutil::transition_image(cmd, this->swapchainImages[swapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
 
 	// execute a copy from the draw image into the swapchain
 	vkutil::copy_image_to_image(cmd, this->drawImage.image, this->swapchainImages[swapchainImageIndex], this->drawExtent, this->swapchainExtent);
