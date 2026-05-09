@@ -56,6 +56,7 @@ class VulkanEngine {
     VmaAllocationCreateFlags allocFlags
   );
   void destroy_buffer(const AllocatedBuffer& buffer);
+  GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
   void draw();
   void draw_background(VkCommandBuffer);
