@@ -548,6 +548,71 @@ void VulkanEngine::init_imgui()
 	});
 }
 
+
+/**NOTE: modernizing the tutorial function to use allocFalgs in combination with memoryUsageFlags
+
+VmaMemoryUsage:
+  VMA_MEMORY_USAGE_AUTO
+    Pick the best heap based on the flags I gave you." VMA looks at your HOST_ACCESS_* flags and VkBufferUsageFlags and decides:
+      - Host access requested → host-visible memory
+      - No host access → device-local memory
+      - Both possible (unified memory, or BAR on discrete) → device-local with host visibility
+
+  VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE
+    Same as AUTO, but if there's a tie or ambiguity, lean toward device-local.
+    Useful for resources the GPU reads many times after one upload — meshes, textures, static UBOs.
+    On a discrete GPU this gets you VRAM; on Mac it doesn't matter.
+
+  VMA_MEMORY_USAGE_AUTO_PREFER_HOST
+    Same as AUTO, but lean toward host-visible memory. 
+    Useful for resources written every frame where you'd rather avoid eating into BAR or VRAM — large dynamic buffers, scratch space, readback targets.
+
+VmaAllocationCreateFlags:
+  VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT
+    You promise to only write to the mapped pointer, and only in increasing address order (no reading back, no random seeks).
+    VMA can put this in write-combined memory, which is fast for streaming writes but terrible if you ever read from it.
+
+  VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT
+    You might read from the mapping, or write to it out of order. VMA picks cached memory so reads aren't catastrophically slow.
+    Slightly less optimal for pure streaming writes, but safe.
+
+  VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT
+    Used together with one of the above. Tells VMA "if you can't get host-visible memory, fall back to device-local and I'll use a staging buffer.
+    Useful on discrete GPUs where host-visible device-local memory (BAR) is limited
+**/
+AllocatedBuffer VulkanEngine::create_buffer(
+  size_t allocSize,
+  VkBufferUsageFlags usage,
+  VmaMemoryUsage memoryUsage,
+  VmaAllocationCreateFlags allocFlags
+) {
+	// allocate buffer
+	VkBufferCreateInfo bufferInfo = {.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
+	bufferInfo.pNext = nullptr;
+	bufferInfo.size = allocSize;
+
+	bufferInfo.usage = usage;
+
+	VmaAllocationCreateInfo vmaallocInfo = {};
+	vmaallocInfo.usage = memoryUsage;
+	vmaallocInfo.flags = allocFlags;
+
+	AllocatedBuffer newBuffer;
+
+	// allocate the buffer
+	VK_CHECK(vmaCreateBuffer(this->allocator, &bufferInfo, &vmaallocInfo, &newBuffer.buffer, &newBuffer.allocation,
+		&newBuffer.info));
+
+	return newBuffer;
+}
+
+
+void VulkanEngine::destroy_buffer(const AllocatedBuffer& buffer)
+{
+  vmaDestroyBuffer(this->allocator, buffer.buffer, buffer.allocation);
+}
+
+
 void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)> && function)
 {
   VK_CHECK(vkResetFences(this->device, 1, &this->imGuiFence));

@@ -21,6 +21,7 @@
 
 #include "lib/utils.h"
 
+
 #define VK_CHECK(x)                                                            \
   do {                                                                         \
     VkResult err = (x);                                                        \
@@ -30,12 +31,21 @@
     }                                                                          \
   } while (0)
 
+
+struct AllocatedBuffer {
+    VkBuffer buffer;
+    VmaAllocation allocation;
+    VmaAllocationInfo info;
+};
+
+
 struct ComputePushConstants {
   glm::vec4 data1;
   glm::vec4 data2;
   glm::vec4 data3;
   glm::vec4 data4;
 };
+
 
 struct ComputeEffect {
   const char* name;
@@ -46,6 +56,7 @@ struct ComputeEffect {
   ComputePushConstants data;
 
 };
+
 
 struct Vk_DeletionQueue 
 {
@@ -58,6 +69,7 @@ struct Vk_DeletionQueue
 
 
 };
+
 
 struct DeletionQueue
 {
@@ -77,6 +89,7 @@ struct DeletionQueue
 	}
 };
 
+
 struct FrameData {
   VkCommandPool commandPool;
   VkCommandBuffer mainCommandBuffer;
@@ -86,6 +99,7 @@ struct FrameData {
 
   DeletionQueue deletionQueue;
 };
+
 
 struct AllocatedImage {
     VkImage image;

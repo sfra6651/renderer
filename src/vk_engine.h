@@ -42,19 +42,25 @@ class VulkanEngine {
   void init_pipelines();
   void init_background_pipelines();
   void init_push_constant_pipelines();
-  
   void init_triangle_pipelines();
 
   void init_imgui();
+
+  void create_swapchain(uint32_t, uint32_t);
+  void destroy_swapchain();
+
+  AllocatedBuffer create_buffer(
+    size_t allocSize,
+    VkBufferUsageFlags usage,
+    VmaMemoryUsage memoryUsage,
+    VmaAllocationCreateFlags allocFlags
+  );
+  void destroy_buffer(const AllocatedBuffer& buffer);
 
   void draw();
   void draw_background(VkCommandBuffer);
   void draw_geometry(VkCommandBuffer cmd);
   void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
-
-  void create_swapchain(uint32_t, uint32_t);
-  void destroy_swapchain();
-
 
   FrameData& get_current_frame() { return frames[frameNumber % FRAME_OVERLAP]; };
 
