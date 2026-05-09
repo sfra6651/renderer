@@ -222,15 +222,15 @@ void VulkanEngine::init_commands() {
 	}
 
   // imgui immediate mode commands
-  VK_CHECK(vkCreateCommandPool(this->device, &commandPoolInfo, nullptr, &this->imGuiCommandPool));
+  VK_CHECK(vkCreateCommandPool(this->device, &commandPoolInfo, nullptr, &this->immediateCommandPool));
 
 	// allocate the command buffer for immediate submits
-	VkCommandBufferAllocateInfo cmdAllocInfo = vkinit::command_buffer_allocate_info(this->imGuiCommandPool, 1);
+	VkCommandBufferAllocateInfo cmdAllocInfo = vkinit::command_buffer_allocate_info(this->immediateCommandPool, 1);
 
-	VK_CHECK(vkAllocateCommandBuffers(this->device, &cmdAllocInfo, &this->imGuiCommandBuffer));
+	VK_CHECK(vkAllocateCommandBuffers(this->device, &cmdAllocInfo, &this->immediateCommandBuffer));
 
 	this->mainDeletionQueue.push_function([&]() { 
-	vkDestroyCommandPool(this->device, this->imGuiCommandPool, nullptr);
+	vkDestroyCommandPool(this->device, this->immediateCommandPool, nullptr);
 	});
 };
 
@@ -255,8 +255,8 @@ void VulkanEngine::init_sync_structures() {
   }
 
   //imgui fence
-  VK_CHECK(vkCreateFence(this->device, &fenceCreateInfo, nullptr, &this->imGuiFence));
-	this->mainDeletionQueue.push_function([&]() { vkDestroyFence(this->device, this->imGuiFence, nullptr); });
+  VK_CHECK(vkCreateFence(this->device, &fenceCreateInfo, nullptr, &this->immediateFence));
+	this->mainDeletionQueue.push_function([&]() { vkDestroyFence(this->device, this->immediateFence, nullptr); });
 };
 
 void VulkanEngine::init_descriptors() 
@@ -638,19 +638,53 @@ GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<V
   //create index buffer
   newSurface.indexBuffer = create_buffer(
     indexBufferSize,
-    VK_BUFFER_USAGE_2_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
     VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
     0
   );
+
+  AllocatedBuffer staging = create_buffer(
+    vertexBufferSize + indexBufferSize,
+    VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+    VMA_MEMORY_USAGE_AUTO,
+    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT
+  );
+
+	void* data = staging.allocation->GetMappedData();
+
+	// copy vertex buffer
+	memcpy(data, vertices.data(), vertexBufferSize);
+	// copy index buffer
+	memcpy((char*)data + vertexBufferSize, indices.data(), indexBufferSize);
+
+	immediate_submit([&](VkCommandBuffer cmd) {
+		VkBufferCopy vertexCopy{ 0 };
+		vertexCopy.dstOffset = 0;
+		vertexCopy.srcOffset = 0;
+		vertexCopy.size = vertexBufferSize;
+
+		vkCmdCopyBuffer(cmd, staging.buffer, newSurface.vertexBuffer.buffer, 1, &vertexCopy);
+
+		VkBufferCopy indexCopy{ 0 };
+		indexCopy.dstOffset = 0;
+		indexCopy.srcOffset = vertexBufferSize;
+		indexCopy.size = indexBufferSize;
+
+		vkCmdCopyBuffer(cmd, staging.buffer, newSurface.indexBuffer.buffer, 1, &indexCopy);
+	});
+
+	destroy_buffer(staging);
+
+	return newSurface;
 }
 
 
-void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)> && function)
+void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& function)
 {
-  VK_CHECK(vkResetFences(this->device, 1, &this->imGuiFence));
-  VK_CHECK(vkResetCommandBuffer(this->imGuiCommandBuffer, 0));
+  VK_CHECK(vkResetFences(this->device, 1, &this->immediateFence));
+  VK_CHECK(vkResetCommandBuffer(this->immediateCommandBuffer, 0));
 
-  VkCommandBuffer cmd = this->imGuiCommandBuffer;
+  VkCommandBuffer cmd = this->immediateCommandBuffer;
 
   VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
@@ -665,8 +699,8 @@ void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)> && 
 
   //submit command buffer to the queue and execute it
   //this->renderFence will now block until the graphic command finish executing
-  VK_CHECK(vkQueueSubmit2(this->graphicsQueue, 1, &submit, this->imGuiFence));
-  VK_CHECK(vkWaitForFences(this->device, 1, &this->imGuiFence, true, 9999999999));
+  VK_CHECK(vkQueueSubmit2(this->graphicsQueue, 1, &submit, this->immediateFence));
+  VK_CHECK(vkWaitForFences(this->device, 1, &this->immediateFence, true, 9999999999));
 }
 
 void VulkanEngine::draw() {

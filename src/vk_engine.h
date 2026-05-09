@@ -20,9 +20,9 @@ class VulkanEngine {
   VkPipeline trianglePipeline;
 
   //immediate submit structures
-  VkFence imGuiFence;
-  VkCommandBuffer imGuiCommandBuffer;
-  VkCommandPool imGuiCommandPool;
+  VkFence immediateFence;
+  VkCommandBuffer immediateCommandBuffer;
+  VkCommandPool immediateCommandPool;
 
   std::vector<ComputeEffect> backgroundEffects;
   int currentBackgroundEffect {0};
