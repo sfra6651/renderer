@@ -16,6 +16,7 @@
 #include <vector>
 
 #define GLM_ENABLE_EXPERIMENTAL
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 
@@ -55,8 +56,8 @@ struct GPUMeshBuffers {
 };
 
 struct GPUDrawPushConstants {
-  glm::mat4 worldMatirx;
-  VkDeviceAddress vertextBuffer;
+  glm::mat4 worldMatrix;
+  VkDeviceAddress vertexBuffer;
 };
 
 

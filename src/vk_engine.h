@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vk_descriptors.h"
+#include "vk_loader.h"
 #include "vk_pipelines.h"
 #include "vk_initializers.h"
 #include "vk_types.h"
@@ -14,10 +15,15 @@ class VulkanEngine {
   vkutil::DescriptorAllocator globalDescriptorAllocator;
   VkDescriptorSet drawImageDescriptors;
   VkDescriptorSetLayout drawImageDescriptorLayout;
-  VkPipeline gradientPipeline;
+
 	VkPipelineLayout gradientPipelineLayout;
+  VkPipeline gradientPipeline;
   VkPipelineLayout trianglePipelineLayout;
   VkPipeline trianglePipeline;
+  VkPipelineLayout meshPipelineLayout;
+  VkPipeline meshPipeline;
+
+  std::vector<std::shared_ptr<MeshAsset>> testMeshes;
 
   //immediate submit structures
   VkFence immediateFence;
@@ -33,6 +39,8 @@ class VulkanEngine {
   void run();
   void cleanup();
 
+  GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
+
  private:
   void init_vulkan(); //instance, window and devices
   void init_swapchain();
@@ -43,6 +51,9 @@ class VulkanEngine {
   void init_background_pipelines();
   void init_push_constant_pipelines();
   void init_triangle_pipelines();
+  void init_mesh_pipeline();
+
+  void init_default_data();
 
   void init_imgui();
 
@@ -56,7 +67,6 @@ class VulkanEngine {
     VmaAllocationCreateFlags allocFlags
   );
   void destroy_buffer(const AllocatedBuffer& buffer);
-  GPUMeshBuffers uploadMesh(std::span<uint32_t> indices, std::span<Vertex> vertices);
 
   void draw();
   void draw_background(VkCommandBuffer);
@@ -64,6 +74,8 @@ class VulkanEngine {
   void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 
   FrameData& get_current_frame() { return frames[frameNumber % FRAME_OVERLAP]; };
+
+  GPUMeshBuffers rectangle;
 
   VmaAllocator allocator;
 
@@ -88,6 +100,7 @@ class VulkanEngine {
 
   //draw rescources
   AllocatedImage drawImage;
+  AllocatedImage depthImage;
 	VkExtent2D drawExtent;
 
   VkQueue graphicsQueue;
