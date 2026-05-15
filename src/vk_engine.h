@@ -18,8 +18,6 @@ class VulkanEngine {
 
 	VkPipelineLayout gradientPipelineLayout;
   VkPipeline gradientPipeline;
-  VkPipelineLayout trianglePipelineLayout;
-  VkPipeline trianglePipeline;
   VkPipelineLayout meshPipelineLayout;
   VkPipeline meshPipeline;
 
@@ -50,7 +48,6 @@ class VulkanEngine {
   void init_pipelines();
   void init_background_pipelines();
   void init_push_constant_pipelines();
-  void init_triangle_pipelines();
   void init_mesh_pipeline();
 
   void init_default_data();
@@ -74,8 +71,6 @@ class VulkanEngine {
   void draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView);
 
   FrameData& get_current_frame() { return frames[frameNumber % FRAME_OVERLAP]; };
-
-  GPUMeshBuffers rectangle;
 
   VmaAllocator allocator;
 
