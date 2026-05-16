@@ -14,6 +14,7 @@
 #include <string>
 #include <span>
 #include <vector>
+#include <vulkan/vk_enum_string_helper.h>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
@@ -27,16 +28,24 @@
   do {                                                                         \
     VkResult err = (x);                                                        \
     if (err) {                                                                 \
-      logErr("Detected Vulkan error:", static_cast<int>(err));                 \
+      logErr("Detected Vulkan error:", string_VkResult(err));                  \
       std::abort();                                                            \
     }                                                                          \
   } while (0)
 
+struct GPUSceneData {
+  glm::mat4 view;
+  glm::mat4 proj;
+  glm::mat4 viewproj;
+  glm::vec4 ambientColor;
+  glm::vec4 sunlightDirection; // w = sun power
+  glm::vec4 sunlightColor;
+};
 
 struct AllocatedBuffer {
-    VkBuffer buffer;
-    VmaAllocation allocation;
-    VmaAllocationInfo info;
+  VkBuffer buffer;
+  VmaAllocation allocation;
+  VmaAllocationInfo info;
 };
 
 

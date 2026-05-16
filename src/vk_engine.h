@@ -1,10 +1,11 @@
 #pragma once
 
-#include "vk_descriptors.h"
-#include "vk_loader.h"
-#include "vk_pipelines.h"
-#include "vk_initializers.h"
-#include "vk_types.h"
+#include <camera.h>
+#include <vk_descriptors.h>
+#include <vk_loader.h>
+#include <vk_pipelines.h>
+#include <vk_initializers.h>
+#include <vk_types.h>
 
 struct SDL_Window;
 
@@ -12,6 +13,7 @@ constexpr uint32_t FRAME_OVERLAP = 2;
 
 class VulkanEngine {
  public:
+  Camera mainCamera;
   vkutil::DescriptorAllocator globalDescriptorAllocator;
   VkDescriptorSet drawImageDescriptors;
   VkDescriptorSetLayout drawImageDescriptorLayout;
@@ -30,6 +32,8 @@ class VulkanEngine {
 
   std::vector<ComputeEffect> backgroundEffects;
   int currentBackgroundEffect {0};
+
+  GPUSceneData sceneData;
 
   void immediate_submit(std::function<void(VkCommandBuffer cmd)> && function);
 
@@ -55,6 +59,7 @@ class VulkanEngine {
   void init_imgui();
 
   void create_swapchain(uint32_t, uint32_t);
+  void resize_swapchain();
   void destroy_swapchain();
 
   AllocatedBuffer create_buffer(
@@ -64,6 +69,8 @@ class VulkanEngine {
     VmaAllocationCreateFlags allocFlags
   );
   void destroy_buffer(const AllocatedBuffer& buffer);
+
+  void update_scene();
 
   void draw();
   void draw_background(VkCommandBuffer);
@@ -78,7 +85,9 @@ class VulkanEngine {
   uint32_t frameNumber = 0;
   FrameData frames[FRAME_OVERLAP];
   VkExtent2D windowExtent {2560, 1440};
+  float renderScale = 1.0f;
   SDL_Window* window = nullptr;
+  bool resizeRequested = false;
 
   VkInstance instance;
   VkDebugUtilsMessengerEXT debugMessenger;

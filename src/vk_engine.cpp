@@ -55,6 +55,11 @@ void VulkanEngine::init() {
 
   init_imgui();
 
+  mainCamera.velocity = glm::vec3(0.f);
+	mainCamera.position = glm::vec3(0, 0, 5);
+  mainCamera.pitch = 0;
+  mainCamera.yaw = 0;
+
   this->isInitialized = true;
 }
 
@@ -154,6 +159,20 @@ void VulkanEngine::create_swapchain(uint32_t width, uint32_t height) {
   this->swapchainExtent = vkbSwapchain.extent;
   this->swapchainImages = vkbSwapchain.get_images().value();
   this->swapchainImageViews = vkbSwapchain.get_image_views().value();
+}
+
+void VulkanEngine::resize_swapchain()
+{
+  vkDeviceWaitIdle(this->device);
+	destroy_swapchain();
+
+	int w, h;
+	SDL_GetWindowSize(this->window, &w, &h);
+	this->windowExtent.width = w;
+	this->windowExtent.height = h;
+	create_swapchain(this->windowExtent.width, this->windowExtent.height);
+
+	resizeRequested = false;
 }
 
 
@@ -748,13 +767,21 @@ void VulkanEngine::immediate_submit(std::function<void(VkCommandBuffer cmd)>&& f
 }
 
 void VulkanEngine::draw() {
+  this->drawExtent.height = std::min(this->swapchainExtent.height, this->drawImage.imageExtent.height) * renderScale;
+  this->drawExtent.width= std::min(this->swapchainExtent.width, this->drawImage.imageExtent.width) * renderScale;
+
   // wait until the gpu has finished rendering the last frame. Timeout of 1second
 	VK_CHECK(vkWaitForFences(this->device, 1, &get_current_frame().renderFence, true, 1000000000));
 	VK_CHECK(vkResetFences(this->device, 1, &get_current_frame().renderFence));
 
   //request image from the swapchain
 	uint32_t swapchainImageIndex;
-	VK_CHECK(vkAcquireNextImageKHR(this->device, this->swapchain, 1000000000, get_current_frame().presentSemaphore, nullptr, &swapchainImageIndex));
+	VkResult err = vkAcquireNextImageKHR(this->device, this->swapchain, 1000000000, get_current_frame().presentSemaphore, nullptr, &swapchainImageIndex);
+  if (err == VK_ERROR_OUT_OF_DATE_KHR) {
+    this->resizeRequested = true;       
+	  return ;
+	}
+
 
   VkCommandBuffer cmd = get_current_frame().mainCommandBuffer;
 
@@ -765,8 +792,8 @@ void VulkanEngine::draw() {
 	//begin the command buffer recording. We will use this command buffer exactly once, so we want to let vulkan know that
 	VkCommandBufferBeginInfo cmdBeginInfo = vkinit::command_buffer_begin_info(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
 
-  this->drawExtent.width = this->drawImage.imageExtent.width;
-  this->drawExtent.height = this->drawImage.imageExtent.height;
+//  this->drawExtent.width = this->drawImage.imageExtent.width;
+//  this->drawExtent.height = this->drawImage.imageExtent.height;
 
 	//start the command buffer recording
 		//start the command buffer recording
@@ -819,7 +846,7 @@ void VulkanEngine::draw() {
 	VkSubmitInfo2 submit = vkinit::submit_info(&cmdinfo, &signalInfo, &waitInfo);	
 
 	//submit command buffer to the queue and execute it.
-	// renderFence will now block until the graphic commands finish execution
+	// //renderFence will now block until the graphic commands finish execution
 	VK_CHECK(vkQueueSubmit2(this->graphicsQueue, 1, &submit, get_current_frame().renderFence));
 
   get_current_frame().deletionQueue.flush();
@@ -839,7 +866,12 @@ void VulkanEngine::draw() {
 
 	presentInfo.pImageIndices = &swapchainImageIndex;
 
-	VK_CHECK(vkQueuePresentKHR(this->graphicsQueue, &presentInfo));
+	VkResult presentErr = vkQueuePresentKHR(this->graphicsQueue, &presentInfo);
+  if (presentErr == VK_ERROR_OUT_OF_DATE_KHR) {
+    this->resizeRequested = true;       
+		return ;
+	}
+
 
 	//increase the number of frames drawn
 	frameNumber++;
@@ -884,7 +916,8 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 	vkCmdSetScissor(cmd, 0, 1, &scissor);
 
   GPUDrawPushConstants pushConstants;
-  pushConstants.worldMatrix = glm::mat4 { 1.f };
+  pushConstants.worldMatrix = this->sceneData.viewproj;
+  pushConstants.vertexBuffer = testMeshes[2]->meshBuffers.vertexBufferAddress;
 
   vkCmdPushConstants(
     cmd,
@@ -895,20 +928,6 @@ void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
     &pushConstants
   );
 
-  // draw the loaded mesh
-  glm::mat4 view = glm::translate(glm::vec3{ 0, 0, -5 });
-  glm::mat4 projection = glm::perspective(
-    glm::radians(70.f),
-    (float)this->drawExtent.width / (float)this->drawExtent.height,
-    10000.f,
-    0.1f
-  );
-
-  // invert Y so we match OpenGL / glTF axis convention
-  projection[1][1] *= -1;
-
-  pushConstants.worldMatrix = projection * view;
-  pushConstants.vertexBuffer = testMeshes[2]->meshBuffers.vertexBufferAddress;
 
   vkCmdPushConstants(cmd, this->meshPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(GPUDrawPushConstants), &pushConstants);
   vkCmdBindIndexBuffer(cmd, testMeshes[2]->meshBuffers.indexBuffer.buffer, 0, VK_INDEX_TYPE_UINT32);
@@ -955,6 +974,23 @@ void VulkanEngine::draw_imgui(VkCommandBuffer cmd, VkImageView targetImageView)
 	vkCmdEndRendering(cmd);
 }
 
+void VulkanEngine::update_scene()
+{
+    this->mainCamera.update();
+
+    glm::mat4 view = this->mainCamera.getViewMatrix();
+
+    // camera projection
+    glm::mat4 projection = glm::perspective(glm::radians(70.f), (float)this->windowExtent.width / (float)this->windowExtent.height, 10000.f, 0.1f);
+
+    // invert the Y direction on projection matrix so that we are more similar
+    // to opengl and gltf axis
+    projection[1][1] *= -1;
+
+    this->sceneData.view = view;
+    this->sceneData.proj = projection;
+    this->sceneData.viewproj = projection * view;
+}
 
 void VulkanEngine::run() {
   SDL_Event e;
@@ -977,6 +1013,8 @@ void VulkanEngine::run() {
         stopRendering = false;
       }
 
+      this->mainCamera.processSDLEvent(e);
+
       ImGui_ImplSDL3_ProcessEvent(&e);
     }
 
@@ -985,11 +1023,16 @@ void VulkanEngine::run() {
       continue;
     }
 
+    if (resizeRequested) {
+	    resize_swapchain();
+    }
+
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 
     if (ImGui::Begin("background")) {
+      ImGui::SliderFloat("Render Scale",&renderScale, 0.3f, 1.f);
       ComputeEffect& selected = this->backgroundEffects[this->currentBackgroundEffect];
 
       ImGui::Text("Selected effect: %s", selected.name);
@@ -1007,6 +1050,7 @@ void VulkanEngine::run() {
 
     ImGui::Render();
 
+    update_scene();
     draw();
 
     ++frameCounter;

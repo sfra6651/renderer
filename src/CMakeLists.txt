@@ -1,5 +1,6 @@
 add_executable(renderer
   main.cpp
+  camera.cpp
   vk_engine.cpp
   vk_initializers.cpp
   vk_images.cpp
