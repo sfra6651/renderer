@@ -89,19 +89,6 @@ struct ComputeEffect {
 };
 
 
-struct Vk_DeletionQueue 
-{
-  std::deque<VkImage> images;
-  std::deque<VkImageView> imageViews;
-  std::deque<VkDescriptorPool> descriptorPools;
-  std::deque<VkDescriptorSetLayout> descriptorSetLayouts;
-  std::deque<VkPipelineLayout> pipelineLayouts;
-  std::deque<VkPipeline> pipelines;
-
-
-};
-
-
 struct DeletionQueue
 {
 	std::deque<std::function<void()>> deletors;
@@ -119,18 +106,6 @@ struct DeletionQueue
 		deletors.clear();
 	}
 };
-
-
-struct FrameData {
-  VkCommandPool commandPool;
-  VkCommandBuffer mainCommandBuffer;
-
-  VkSemaphore presentSemaphore;
-  VkFence renderFence;
-
-  DeletionQueue deletionQueue;
-};
-
 
 struct AllocatedImage {
     VkImage image;

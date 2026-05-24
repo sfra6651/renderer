@@ -336,13 +336,36 @@ void VulkanEngine::init_descriptors()
     vkDestroyDescriptorSetLayout(this->device, this->drawImageDescriptorLayout, nullptr);
   });
 
+  for (int i = 0; i < FRAME_OVERLAP; i++) {
+		// create a descriptor pool
+		std::vector<DescriptorAllocator::PoolSizeRatio> frame_sizes = { 
+			{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 3 },
+			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 3 },
+			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 },
+			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4 },
+		};
+
+		this->frames[i].frameDescriptors = DescriptorAllocator {};
+		this->frames[i].frameDescriptors.init(this->device, 1000, frame_sizes);
+	
+		this->mainDeletionQueue.push_function([&, i]() {
+			this->frames[i].frameDescriptors.destroy_pools(this->device);
+		});
+	}
+
+  vkutil::DescriptorLayoutBuilder builder;
+	builder.add_binding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	this->gpuSceneDataDescriptorLayout = builder.build(this->device, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+  
+  this->mainDeletionQueue.push_function([&]() {
+    vkDestroyDescriptorSetLayout(this->device, this->gpuSceneDataDescriptorLayout, nullptr);
+  });
 }
 
 
 void VulkanEngine::init_pipelines()
 {
   // compute
-  //init_background_pipelines();
   init_push_constant_pipelines(); // replacement for the background pipeline with push constants
 
   // graphics
@@ -498,53 +521,6 @@ void VulkanEngine:: init_default_data()
   });
 }
 
-
-void VulkanEngine::init_background_pipelines()
-{
-  VkPipelineLayoutCreateInfo computeLayout{};
-	computeLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	computeLayout.pNext = nullptr;
-	computeLayout.pSetLayouts = &this->drawImageDescriptorLayout;
-	computeLayout.setLayoutCount = 1;
-
-	VK_CHECK(vkCreatePipelineLayout(this->device, &computeLayout, nullptr, &this->gradientPipelineLayout));
-
-  VkShaderModule computeDrawShader;
-	if (!vkutil::load_shader_module("bin/shaders/compute.spv", this->device, &computeDrawShader))
-	{
-		logErr("Error when building the compute shader");
-    std::abort();
-	}
-
-	VkPipelineShaderStageCreateInfo stageinfo{};
-	stageinfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-	stageinfo.pNext = nullptr;
-	stageinfo.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-	stageinfo.module = computeDrawShader;
-	stageinfo.pName = "main";
-
-	VkComputePipelineCreateInfo computePipelineCreateInfo{};
-	computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-	computePipelineCreateInfo.pNext = nullptr;
-	computePipelineCreateInfo.layout = this->gradientPipelineLayout;
-	computePipelineCreateInfo.stage = stageinfo;
-	
-	VK_CHECK(vkCreateComputePipelines(
-    this->device,
-    VK_NULL_HANDLE,
-    1,
-    &computePipelineCreateInfo,
-    nullptr,
-    &this->gradientPipeline
-  ));
-
-  vkDestroyShaderModule(this->device, computeDrawShader, nullptr);
-
-	this->mainDeletionQueue.push_function([&]() {
-		vkDestroyPipelineLayout(this->device, this->gradientPipelineLayout, nullptr);
-		vkDestroyPipeline(this->device, this->gradientPipeline, nullptr);
-		});
-}
 
 void VulkanEngine::init_imgui()
 {
@@ -714,6 +690,7 @@ GPUMeshBuffers VulkanEngine::uploadMesh(std::span<uint32_t> indices, std::span<V
   );
 
 	void* data = staging.allocation->GetMappedData();
+  assert(data && "staging buffer not mapped");
 
 	// copy vertex buffer
 	memcpy(data, vertices.data(), vertexBufferSize);
@@ -773,6 +750,9 @@ void VulkanEngine::draw() {
   // wait until the gpu has finished rendering the last frame. Timeout of 1second
 	VK_CHECK(vkWaitForFences(this->device, 1, &get_current_frame().renderFence, true, 1000000000));
 	VK_CHECK(vkResetFences(this->device, 1, &get_current_frame().renderFence));
+
+  get_current_frame().deletionQueue.flush();
+	get_current_frame().frameDescriptors.clear_pools(this->device);
 
   //request image from the swapchain
 	uint32_t swapchainImageIndex;
@@ -880,6 +860,30 @@ void VulkanEngine::draw() {
 
 void VulkanEngine::draw_geometry(VkCommandBuffer cmd)
 {
+  //allocate a new uniform buffer for the scene data
+	AllocatedBuffer gpuSceneDataBuffer = create_buffer(
+    sizeof(GPUSceneData),
+    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    VMA_MEMORY_USAGE_AUTO,
+    VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT
+  );
+
+	//add it to the deletion queue of this frame so it gets deleted once its been used
+	get_current_frame().deletionQueue.push_function([=, this]() {
+		destroy_buffer(gpuSceneDataBuffer);
+		});
+
+	//write the buffer
+	GPUSceneData* sceneUniformData = (GPUSceneData*)gpuSceneDataBuffer.allocation->GetMappedData();
+	*sceneUniformData = sceneData;
+
+	//create a descriptor set that binds that buffer and update it
+	VkDescriptorSet globalDescriptor = get_current_frame().frameDescriptors.allocate(this->device, this->gpuSceneDataDescriptorLayout);
+
+	DescriptorWriter writer;
+	writer.write_buffer(0, gpuSceneDataBuffer.buffer, sizeof(GPUSceneData), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+	writer.update_set(this->device, globalDescriptor);
+
   //begin a render pass  connected to our draw image
 	VkRenderingAttachmentInfo colorAttachment = vkinit::attachment_info(
     this->drawImage.imageView,

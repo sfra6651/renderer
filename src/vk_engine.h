@@ -11,12 +11,24 @@ struct SDL_Window;
 
 constexpr uint32_t FRAME_OVERLAP = 2;
 
+struct FrameData {
+  VkCommandPool commandPool;
+  VkCommandBuffer mainCommandBuffer;
+
+  VkSemaphore presentSemaphore;
+  VkFence renderFence;
+
+  DeletionQueue deletionQueue;
+  DescriptorAllocator frameDescriptors;
+};
+
 class VulkanEngine {
  public:
   Camera mainCamera;
   vkutil::DescriptorAllocator globalDescriptorAllocator;
   VkDescriptorSet drawImageDescriptors;
   VkDescriptorSetLayout drawImageDescriptorLayout;
+  VkDescriptorSetLayout gpuSceneDataDescriptorLayout;
 
 	VkPipelineLayout gradientPipelineLayout;
   VkPipeline gradientPipeline;
@@ -50,7 +62,6 @@ class VulkanEngine {
   void init_sync_structures();
   void init_descriptors();
   void init_pipelines();
-  void init_background_pipelines();
   void init_push_constant_pipelines();
   void init_mesh_pipeline();
 
